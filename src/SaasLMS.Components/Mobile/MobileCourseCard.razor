@@ -1,0 +1,55 @@
+@using SaasLMS.Core.Courses
+
+<div class="mobile-course-card @(IsOfflineAvailable ? "offline-available" : "")" @onclick="OnClick">
+    <div class="course-thumbnail">
+        <img src="@Course.ThumbnailUrl" alt="@Course.Title" />
+        @if (IsOfflineAvailable)
+        {
+            <div class="offline-badge">
+                <i class="bi bi-cloud-check"></i>
+            </div>
+        }
+    </div>
+    
+    <div class="course-info">
+        <h3 class="course-title">@Course.Title</h3>
+        <p class="course-description">@Course.Description</p>
+        
+        <div class="course-meta">
+            <div class="progress-info">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: @(Progress)%"></div>
+                </div>
+                <span class="progress-text">@Progress%</span>
+            </div>
+            
+            <div class="course-stats">
+                <span class="modules-count">
+                    <i class="bi bi-collection"></i>
+                    @Course.Modules.Count modules
+                </span>
+                @if (Course.EstimatedDuration.HasValue)
+                {
+                    <span class="duration">
+                        <i class="bi bi-clock"></i>
+                        @FormatDuration(Course.EstimatedDuration.Value)
+                    </span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Course Course { get; set; }
+    [Parameter] public float Progress { get; set; }
+    [Parameter] public bool IsOfflineAvailable { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{Math.Ceiling(duration.TotalHours)}h";
+        return $"{duration.Minutes}m";
+    }
+}

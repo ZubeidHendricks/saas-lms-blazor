@@ -1,0 +1,177 @@
+@using SaasLMS.Core.Assessments
+
+<div class="mobile-quiz-runner">
+    @if (_currentQuiz == null)
+    {
+        <div class="quiz-intro">
+            <h2>@Quiz.Title</h2>
+            <p>@Quiz.Description</p>
+            
+            <div class="quiz-info">
+                <div class="info-item">
+                    <i class="bi bi-question-circle"></i>
+                    <span>@Quiz.Questions.Count questions</span>
+                </div>
+                @if (Quiz.TimeLimit.HasValue)
+                {
+                    <div class="info-item">
+                        <i class="bi bi-clock"></i>
+                        <span>@Quiz.TimeLimit.Value.TotalMinutes minutes</span>
+                    </div>
+                }
+                <div class="info-item">
+                    <i class="bi bi-trophy"></i>
+                    <span>Passing score: @Quiz.PassingScore%</span>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary w-100" @onclick="StartQuiz">
+                Start Quiz
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="quiz-progress">
+            <div class="progress-text">
+                Question @(_currentIndex + 1) of @Quiz.Questions.Count
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" 
+                     style="width: @((_currentIndex + 1) * 100 / Quiz.Questions.Count)%">
+                </div>
+            </div>
+        </div>
+
+        <div class="question-container">
+            <h3>@_currentQuestion.Text</h3>
+            
+            @switch (_currentQuestion.Type)
+            {
+                case QuestionType.MultipleChoice:
+                    <div class="options-list">
+                        @foreach (var option in _currentQuestion.Options)
+                        {
+                            <button class="option-btn @(IsOptionSelected(option.Id) ? "selected" : "")"
+                                    @onclick="() => SelectOption(option.Id)">
+                                @option.Text
+                            </button>
+                        }
+                    </div>
+                    break;
+                    
+                case QuestionType.TrueFalse:
+                    <div class="true-false-options">
+                        <button class="option-btn @(_currentAnswer == "true" ? "selected" : "")"
+                                @onclick="() => SelectOption("true")">
+                            True
+                        </button>
+                        <button class="option-btn @(_currentAnswer == "false" ? "selected" : "")"
+                                @onclick="() => SelectOption("false")">
+                            False
+                        </button>
+                    </div>
+                    break;
+                    
+                case QuestionType.ShortAnswer:
+                    <input type="text" 
+                           class="form-control" 
+                           @bind="_currentAnswer"
+                           placeholder="Type your answer" />
+                    break;
+            }
+        </div>
+
+        <div class="navigation-buttons">
+            @if (_currentIndex > 0)
+            {
+                <button class="btn btn-outline-primary" @onclick="PreviousQuestion">
+                    Previous
+                </button>
+            }
+            
+            @if (_currentIndex < Quiz.Questions.Count - 1)
+            {
+                <button class="btn btn-primary" 
+                        @onclick="NextQuestion"
+                        disabled="@string.IsNullOrEmpty(_currentAnswer)">
+                    Next
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-success" 
+                        @onclick="SubmitQuiz"
+                        disabled="@string.IsNullOrEmpty(_currentAnswer)">
+                    Submit
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Quiz Quiz { get; set; }
+    [Parameter] public EventCallback<QuizResult> OnComplete { get; set; }
+
+    private Quiz _currentQuiz;
+    private int _currentIndex;
+    private Question _currentQuestion;
+    private string _currentAnswer;
+    private Dictionary<string, string> _answers = new();
+
+    private void StartQuiz()
+    {
+        _currentQuiz = Quiz;
+        _currentIndex = 0;
+        _currentQuestion = Quiz.Questions[0];
+        StateHasChanged();
+    }
+
+    private bool IsOptionSelected(string optionId)
+    {
+        return _currentAnswer == optionId;
+    }
+
+    private void SelectOption(string optionId)
+    {
+        _currentAnswer = optionId;
+        _answers[_currentQuestion.Id] = optionId;
+    }
+
+    private void NextQuestion()
+    {
+        if (_currentIndex < Quiz.Questions.Count - 1)
+        {
+            _answers[_currentQuestion.Id] = _currentAnswer;
+            _currentIndex++;
+            _currentQuestion = Quiz.Questions[_currentIndex];
+            _currentAnswer = _answers.GetValueOrDefault(_currentQuestion.Id);
+        }
+    }
+
+    private void PreviousQuestion()
+    {
+        if (_currentIndex > 0)
+        {
+            _answers[_currentQuestion.Id] = _currentAnswer;
+            _currentIndex--;
+            _currentQuestion = Quiz.Questions[_currentIndex];
+            _currentAnswer = _answers.GetValueOrDefault(_currentQuestion.Id);
+        }
+    }
+
+    private async Task SubmitQuiz()
+    {
+        _answers[_currentQuestion.Id] = _currentAnswer;
+        
+        var result = new QuizResult
+        {
+            QuizId = Quiz.Id,
+            Answers = _answers,
+            CompletedAt = DateTime.UtcNow
+        };
+
+        await OnComplete.InvokeAsync(result);
+    }
+}

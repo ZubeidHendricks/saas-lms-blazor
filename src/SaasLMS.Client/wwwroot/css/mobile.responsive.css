@@ -1,0 +1,159 @@
+/* Mobile-first with progressive enhancement */
+
+/* Base styles for mobile */
+:root {
+    --breakpoint-sm: 576px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 992px;
+    --breakpoint-xl: 1200px;
+}
+
+/* Common mobile-friendly elements */
+.touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px;
+}
+
+.safe-area-inset {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
+}
+
+/* Mobile Course Card */
+.mobile-course-card {
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg);
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.course-thumbnail {
+    position: relative;
+    aspect-ratio: 16/9;
+}
+
+.course-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.offline-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--primary-color);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+/* Mobile Quiz Runner */
+.mobile-quiz-runner {
+    padding: 16px;
+}
+
+.quiz-intro {
+    text-align: center;
+    padding: 24px 16px;
+}
+
+.quiz-info {
+    display: flex;
+    justify-content: space-around;
+    margin: 24px 0;
+}
+
+.options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 24px 0;
+}
+
+.option-btn {
+    width: 100%;
+    padding: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: none;
+    text-align: left;
+    transition: all 0.3s;
+}
+
+.option-btn.selected {
+    border-color: var(--primary-color);
+    background: var(--primary-color-light);
+}
+
+/* Responsive breakpoints */
+@media (min-width: 576px) {
+    .mobile-course-card {
+        display: flex;
+    }
+
+    .course-thumbnail {
+        width: 200px;
+    }
+
+    .course-info {
+        flex: 1;
+        padding: 16px;
+    }
+}
+
+@media (min-width: 768px) {
+    .mobile-quiz-runner {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .options-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 992px) {
+    .mobile-course-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .mobile-course-list {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --card-bg: #1a1a1a;
+        --border-color: #333;
+        --primary-color-light: rgba(var(--primary-color-rgb), 0.1);
+    }
+
+    .mobile-course-card {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+}
+
+/* Print styles */
+@media print {
+    .mobile-course-card {
+        break-inside: avoid;
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+
+    .offline-badge,
+    .navigation-buttons {
+        display: none;
+    }
+}
