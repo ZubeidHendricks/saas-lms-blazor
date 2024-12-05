@@ -1,0 +1,132 @@
+@using SaasLMS.Core.Content
+@inject IContentService ContentService
+
+<div class="content-editor">
+    <div class="editor-header">
+        <input type="text" 
+               class="title-input" 
+               placeholder="Enter title"
+               @bind="_content.Title" />
+               
+        <div class="content-type-selector">
+            <select @bind="_content.Type">
+                @foreach (var type in Enum.GetValues(typeof(ContentType)))
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="editor-main">
+        @switch (_content.Type)
+        {
+            case ContentType.Text:
+                <RichTextEditor @bind-Value="_content.Content" />
+                break;
+
+            case ContentType.Video:
+                <VideoUploader @bind-Value="_content.VideoUrl"
+                              OnUploadComplete="HandleVideoUpload" />
+                break;
+
+            case ContentType.Quiz:
+                <QuizEditor @bind-Value="_content.QuizContent"
+                           OnQuizUpdate="HandleQuizUpdate" />
+                break;
+
+            case ContentType.Assignment:
+                <AssignmentEditor @bind-Value="_content.AssignmentContent"
+                                OnAssignmentUpdate="HandleAssignmentUpdate" />
+                break;
+        }
+    </div>
+
+    <div class="editor-settings">
+        <h3>Content Settings</h3>
+        
+        <div class="setting-group">
+            <label>Duration (minutes):</label>
+            <input type="number" @bind="_content.EstimatedDuration" min="1" />
+        </div>
+
+        <div class="setting-group">
+            <label>Prerequisites:</label>
+            <MultiSelect Items="@_availablePrerequisites"
+                        @bind-SelectedValues="_content.Prerequisites" />
+        </div>
+
+        <div class="setting-group">
+            <label>Allow Downloads:</label>
+            <input type="checkbox" @bind="_content.AllowDownload" />
+        </div>
+
+        <div class="setting-group">
+            <label>Completion Type:</label>
+            <select @bind="_content.CompletionType">
+                <option value="@CompletionType.ViewOnly">View Only</option>
+                <option value="@CompletionType.RequireQuiz">Require Quiz</option>
+                <option value="@CompletionType.RequireAssignment">Require Assignment</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="editor-actions">
+        <button class="btn btn-secondary" @onclick="SaveDraft">Save Draft</button>
+        <button class="btn btn-primary" @onclick="PublishContent">Publish</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid ModuleId { get; set; }
+    [Parameter] public EventCallback<CourseContent> OnContentSaved { get; set; }
+
+    private CourseContent _content = new();
+    private List<ContentPrerequisite> _availablePrerequisites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _availablePrerequisites = await ContentService.GetAvailablePrerequisitesAsync(ModuleId);
+    }
+
+    private async Task HandleVideoUpload(string videoUrl)
+    {
+        _content.VideoUrl = videoUrl;
+        await ContentService.ProcessVideoAsync(_content.Id, videoUrl);
+    }
+
+    private async Task HandleQuizUpdate(QuizContent quiz)
+    {
+        _content.QuizContent = quiz;
+    }
+
+    private async Task HandleAssignmentUpdate(AssignmentContent assignment)
+    {
+        _content.AssignmentContent = assignment;
+    }
+
+    private async Task SaveDraft()
+    {
+        _content.Status = ContentStatus.Draft;
+        await SaveContent();
+    }
+
+    private async Task PublishContent()
+    {
+        _content.Status = ContentStatus.Published;
+        await SaveContent();
+    }
+
+    private async Task SaveContent()
+    {
+        try
+        {
+            var savedContent = await ContentService.SaveContentAsync(_content);
+            await OnContentSaved.InvokeAsync(savedContent);
+        }
+        catch (Exception ex)
+        {
+            // Handle save error
+        }
+    }
+}

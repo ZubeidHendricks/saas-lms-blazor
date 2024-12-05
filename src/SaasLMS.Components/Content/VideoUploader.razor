@@ -1,0 +1,117 @@
+@using SaasLMS.Core.Content
+@inject IVideoService VideoService
+
+<div class="video-uploader @(_isDragging ? "dragging" : "")">
+    @if (string.IsNullOrEmpty(Value))
+    {
+        <div class="upload-zone"
+             @ondragenter="HandleDragEnter"
+             @ondragleave="HandleDragLeave"
+             @ondragover:preventDefault
+             @ondrop="HandleDrop">
+            
+            <div class="upload-prompt">
+                <i class="bi bi-cloud-upload"></i>
+                <p>Drag and drop your video here or</p>
+                <InputFile OnChange="HandleFileSelection" accept="video/*" />
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="video-preview">
+            <video controls>
+                <source src="@Value" type="@_videoType" />
+            </video>
+            
+            <div class="video-actions">
+                <button class="btn btn-danger" @onclick="RemoveVideo">
+                    <i class="bi bi-trash"></i> Remove
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (_isUploading)
+    {
+        <div class="upload-progress">
+            <div class="progress">
+                <div class="progress-bar" style="width: @(_uploadProgress)%">
+                    @_uploadProgress%
+                </div>
+            </div>
+            <p>Uploading video... Please wait.</p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public EventCallback<string> OnUploadComplete { get; set; }
+
+    private bool _isDragging;
+    private bool _isUploading;
+    private int _uploadProgress;
+    private string _videoType;
+
+    private async Task HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        await UploadVideo(e.File);
+    }
+
+    private void HandleDragEnter()
+    {
+        _isDragging = true;
+    }
+
+    private void HandleDragLeave()
+    {
+        _isDragging = false;
+    }
+
+    private async Task HandleDrop(DragEventArgs e)
+    {
+        _isDragging = false;
+        
+        if (e.DataTransfer.Files.Count > 0)
+        {
+            var file = e.DataTransfer.Files[0];
+            await UploadVideo(file);
+        }
+    }
+
+    private async Task UploadVideo(IBrowserFile file)
+    {
+        try
+        {
+            _isUploading = true;
+            _videoType = file.ContentType;
+
+            var progress = new Progress<int>(percent =>
+            {
+                _uploadProgress = percent;
+                StateHasChanged();
+            });
+
+            var videoUrl = await VideoService.UploadVideoAsync(file, progress);
+            
+            await ValueChanged.InvokeAsync(videoUrl);
+            await OnUploadComplete.InvokeAsync(videoUrl);
+        }
+        catch (Exception ex)
+        {
+            // Handle upload error
+        }
+        finally
+        {
+            _isUploading = false;
+        }
+    }
+
+    private async Task RemoveVideo()
+    {
+        await ValueChanged.InvokeAsync(null);
+        _videoType = null;
+    }
+}
