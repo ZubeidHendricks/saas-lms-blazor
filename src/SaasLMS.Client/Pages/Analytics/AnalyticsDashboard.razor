@@ -1,0 +1,179 @@
+@page "/analytics"
+@using SaasLMS.Client.Components.Dashboard.Analytics
+@inject IAnalyticsService AnalyticsService
+
+<div class="min-h-screen bg-gray-100">
+    <div class="py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-semibold text-gray-900">Analytics & Reports</h1>
+                <div class="flex items-center space-x-4">
+                    <TimeframeSelector @bind-Value="_selectedTimeframe" />
+                    <button @onclick="GenerateReport"
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        <Download class="-ml-1 mr-2 h-5 w-5" />
+                        Export Report
+                    </button>
+                </div>
+            </div>
+
+            <!-- Overview cards -->
+            <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <QuickStatsCard 
+                    Title="Active Students" 
+                    Value="@_analyticsData?.ActiveUsers.ToString("N0")" 
+                    Change="@GetChangePercentage(_analyticsData?.PreviousPeriod.ActiveUsers, _analyticsData?.ActiveUsers)"
+                    Icon="users" />
+
+                <QuickStatsCard 
+                    Title="Course Completions" 
+                    Value="@_analyticsData?.CourseCompletions.ToString("N0")" 
+                    Change="@GetChangePercentage(_analyticsData?.PreviousPeriod.CourseCompletions, _analyticsData?.CourseCompletions)"
+                    Icon="check-circle" />
+
+                <QuickStatsCard 
+                    Title="Average Progress" 
+                    Value="@($"{_analyticsData?.AverageProgress:N1}%")" 
+                    Change="@GetChangePercentage(_analyticsData?.PreviousPeriod.AverageProgress, _analyticsData?.AverageProgress)"
+                    Icon="trending-up" />
+
+                <QuickStatsCard 
+                    Title="Course Rating" 
+                    Value="@($"{_analyticsData?.AverageRating:N1}/5.0")" 
+                    Change="@GetChangePercentage(_analyticsData?.PreviousPeriod.AverageRating, _analyticsData?.AverageRating)"
+                    Icon="star" />
+            </div>
+
+            <!-- Charts grid -->
+            <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+                <!-- Engagement over time -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Student Engagement</h3>
+                    <div class="mt-4">
+                        <EngagementChart Data="@_analyticsData?.EngagementTrend" />
+                    </div>
+                </div>
+
+                <!-- Completion rates -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Course Completion Rates</h3>
+                    <div class="mt-4">
+                        <CompletionRateChart Data="@_analyticsData?.CompletionRates" />
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity heatmap -->
+            <div class="mt-8">
+                <UserActivityHeatmap Data="@_analyticsData?.DailyActivity" />
+            </div>
+
+            <!-- Detailed metrics -->
+            <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-3">
+                <!-- Learning paths -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Popular Learning Paths</h3>
+                    <div class="mt-4 space-y-4">
+                        @if (_analyticsData?.LearningPaths != null)
+                        {
+                            @foreach (var path in _analyticsData.LearningPaths)
+                            {
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-900">@path.Key</span>
+                                    <div class="flex items-center">
+                                        <div class="w-32 bg-gray-200 rounded-full h-2.5 mr-2">
+                                            <div class="bg-indigo-600 h-2.5 rounded-full" style="width: @($"{path.Value}%")"></div>
+                                        </div>
+                                        <span class="text-sm text-gray-500">@($"{path.Value:N1}%")</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-gray-500 py-4">Loading...</div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Time distribution -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Time Distribution</h3>
+                    <div class="mt-4">
+                        <TimeDistributionChart Data="@_analyticsData?.TimeDistribution" />
+                    </div>
+                </div>
+
+                <!-- Content engagement -->
+                <div class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900">Content Engagement</h3>
+                    <div class="mt-4 space-y-4">
+                        @if (_analyticsData?.ContentEngagement != null)
+                        {
+                            @foreach (var content in _analyticsData.ContentEngagement)
+                            {
+                                <div>
+                                    <div class="flex justify-between text-sm text-gray-900">
+                                        <span>@content.Key</span>
+                                        <span>@($"{content.Value:N1}%")</span>
+                                    </div>
+                                    <div class="mt-2 w-full bg-gray-200 rounded-full h-1.5">
+                                        <div class="bg-indigo-600 h-1.5 rounded-full" style="width: @($"{content.Value}%")"></div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-gray-500 py-4">Loading...</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _selectedTimeframe = "month";
+    private AnalyticsDataDTO? _analyticsData;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAnalyticsDataAsync();
+    }
+
+    private async Task LoadAnalyticsDataAsync()
+    {
+        try
+        {
+            _analyticsData = await AnalyticsService.GetAnalyticsDataAsync(_selectedTimeframe);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine(ex);
+        }
+    }
+
+    private async Task GenerateReport()
+    {
+        try
+        {
+            var reportBytes = await AnalyticsService.GenerateReportAsync(_selectedTimeframe);
+            await JSRuntime.InvokeVoidAsync("downloadFile", "analytics-report.pdf", "application/pdf", reportBytes);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine(ex);
+        }
+    }
+
+    private string? GetChangePercentage(double? previous, double? current)
+    {
+        if (!previous.HasValue || !current.HasValue || previous == 0) return null;
+        var change = (current.Value - previous.Value) / previous.Value * 100;
+        return change >= 0 ? $"+{change:N1}%" : $"{change:N1}%";
+    }
+}
