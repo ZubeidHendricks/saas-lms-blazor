@@ -1,0 +1,86 @@
+<div class="bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg font-medium text-gray-900">Recent Student Feedback</h3>
+        <div class="mt-6 flow-root">
+            <ul class="-my-5 divide-y divide-gray-200">
+                @if (Feedback != null)
+                {
+                    @foreach (var item in Feedback)
+                    {
+                        <li class="py-5">
+                            <div class="relative focus-within:ring-2 focus-within:ring-indigo-500">
+                                <h3 class="text-sm font-semibold text-gray-800">
+                                    <a href="/courses/@item.CourseId" class="hover:underline focus:outline-none">
+                                        @item.CourseTitle
+                                    </a>
+                                </h3>
+                                <div class="mt-1 flex items-center">
+                                    <div class="flex items-center">
+                                        @for (var i = 0; i < 5; i++)
+                                        {
+                                            if (i < item.Rating)
+                                            {
+                                                <Star class="h-4 w-4 text-yellow-400 fill-current" />
+                                            }
+                                            else
+                                            {
+                                                <Star class="h-4 w-4 text-gray-300" />
+                                            }
+                                        }
+                                    </div>
+                                    <span class="ml-2 text-sm text-gray-500">
+                                        <TimeAgo DateTime="@item.CreatedAt" />
+                                    </span>
+                                </div>
+                                <p class="mt-2 text-sm text-gray-600 line-clamp-2">
+                                    @item.Comment
+                                </p>
+                                @if (item.InstructorResponse != null)
+                                {
+                                    <div class="mt-2 pl-4 border-l-2 border-gray-200">
+                                        <p class="text-sm text-gray-600">
+                                            <span class="font-medium text-gray-900">Your response: </span>
+                                            @item.InstructorResponse
+                                        </p>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button 
+                                        @onclick="() => RespondToFeedback(item)"
+                                        class="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                                        Respond to feedback
+                                    </button>
+                                }
+                            </div>
+                        </li>
+                    }
+                }
+                else
+                {
+                    <li class="py-4 text-center text-gray-500">
+                        No feedback yet
+                    </li>
+                }
+            </ul>
+        </div>
+        @if (Feedback?.Any() == true)
+        {
+            <div class="mt-6">
+                <a href="/instructor/feedback" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                    View all feedback
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<FeedbackDTO>? Feedback { get; set; }
+
+    private async Task RespondToFeedback(FeedbackDTO feedback)
+    {
+        // Implement feedback response dialog
+    }
+}

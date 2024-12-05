@@ -1,0 +1,55 @@
+@using Recharts
+
+<div class="h-72">
+    @if (Data != null)
+    {
+        <ResponsiveContainer Width="100%" Height="100%">
+            <ComposedChart Data="@ChartData">
+                <XAxis DataKey="date" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <CartesianGrid strokeDasharray="3 3" />
+                <Tooltip />
+                <Legend />
+                <Bar 
+                    DataKey="enrollments" 
+                    YAxisId="left"
+                    Fill="#4F46E5"
+                    Radius={[4, 4, 0, 0]} />
+                <Line 
+                    Type="monotone" 
+                    DataKey="completionRate" 
+                    YAxisId="right"
+                    Stroke="#10B981"
+                    StrokeWidth="2" />
+            </ComposedChart>
+        </ResponsiveContainer>
+    }
+    else
+    {
+        <div class="h-full flex items-center justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Dictionary<string, EnrollmentMetricsDTO>? Data { get; set; }
+
+    private List<ChartDataPoint> ChartData => Data?
+        .Select(x => new ChartDataPoint
+        {
+            Date = x.Key,
+            Enrollments = x.Value.NewEnrollments,
+            CompletionRate = x.Value.CompletionRate
+        })
+        .ToList() ?? new();
+
+    private class ChartDataPoint
+    {
+        public string Date { get; set; } = string.Empty;
+        public int Enrollments { get; set; }
+        public float CompletionRate { get; set; }
+    }
+}
