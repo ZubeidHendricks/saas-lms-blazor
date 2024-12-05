@@ -1,0 +1,30 @@
+@using Models
+@inject IDiscussionService DiscussionService
+
+<div class="discussion-container">
+    @if (_discussions == null)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <div class="discussion-list">
+            @foreach (var discussion in _discussions)
+            {
+                <DiscussionCard Discussion="@discussion" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Discussion> _discussions;
+
+    [Parameter]
+    public int CourseId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _discussions = await DiscussionService.GetDiscussionsAsync(CourseId);
+    }
+}
