@@ -1,0 +1,172 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="h-full flex flex-col bg-white">
+    @if (!_isSubmitted)
+    {
+        <div class="flex-1 overflow-y-auto px-4 py-6">
+            <div class="max-w-3xl mx-auto">
+                <h2 class="text-2xl font-bold text-gray-900 mb-8">@Content.Title</h2>
+
+                @if (_quiz != null)
+                {
+                    <EditForm Model="@_answers" OnValidSubmit="HandleSubmit">
+                        <div class="space-y-8">
+                            @for (var i = 0; i < _quiz.Questions.Count; i++)
+                            {
+                                var question = _quiz.Questions[i];
+                                var questionIndex = i;
+
+                                <div class="bg-gray-50 rounded-lg p-6">
+                                    <h3 class="text-lg font-medium text-gray-900 mb-4">@($"{i + 1}. {question.Text}")</h3>
+
+                                    @switch (question.Type)
+                                    {
+                                        case "MultipleChoice":
+                                            <div class="space-y-3">
+                                                @foreach (var option in question.Options)
+                                                {
+                                                    <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 cursor-pointer">
+                                                        <InputRadio 
+                                                            @bind-Value="_answers[questionIndex]" 
+                                                            Value="@option" 
+                                                            class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                                                        <span class="text-gray-900">@option</span>
+                                                    </label>
+                                                }
+                                            </div>
+                                            break;
+
+                                        case "TrueFalse":
+                                            <div class="space-y-3">
+                                                <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 cursor-pointer">
+                                                    <InputRadio 
+                                                        @bind-Value="_answers[questionIndex]" 
+                                                        Value="true" 
+                                                        class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                                                    <span class="text-gray-900">True</span>
+                                                </label>
+                                                <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-100 cursor-pointer">
+                                                    <InputRadio 
+                                                        @bind-Value="_answers[questionIndex]" 
+                                                        Value="false" 
+                                                        class="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500" />
+                                                    <span class="text-gray-900">False</span>
+                                                </label>
+                                            </div>
+                                            break;
+
+                                        case "ShortAnswer":
+                                            <InputText 
+                                                @bind-Value="_answers[questionIndex]" 
+                                                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                            break;
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-8 flex justify-end">
+                            <button type="submit"
+                                    class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Submit Quiz
+                            </button>
+                        </div>
+                    </EditForm>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="flex-1 overflow-y-auto px-4 py-6">
+            <div class="max-w-3xl mx-auto text-center">
+                @if (_quizResult != null)
+                {
+                    <div class="rounded-full h-24 w-24 @(_quizResult.IsPassed ? "bg-green-100" : "bg-red-100") mx-auto flex items-center justify-center mb-6">
+                        @if (_quizResult.IsPassed)
+                        {
+                            <CheckCircle class="h-12 w-12 text-green-600" />
+                        }
+                        else
+                        {
+                            <XCircle class="h-12 w-12 text-red-600" />
+                        }
+                    </div>
+
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                        @(_quizResult.IsPassed ? "Congratulations!" : "Keep Trying!")
+                    </h2>
+                    <p class="text-lg text-gray-600 mb-8">
+                        You scored @(_quizResult.Score)% (@_quizResult.CorrectAnswers out of @_quizResult.TotalQuestions)
+                    </p>
+
+                    @if (!_quizResult.IsPassed)
+                    {
+                        <button @onclick="RetryQuiz"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Retry Quiz
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentDTO Content { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<float> OnProgressUpdate { get; set; }
+
+    private Quiz? _quiz;
+    private Dictionary<int, string> _answers = new();
+    private bool _isSubmitted;
+    private QuizResultDTO? _quizResult;
+
+    protected override void OnInitialized()
+    {
+        try
+        {
+            _quiz = System.Text.Json.JsonSerializer.Deserialize<Quiz>(Content.QuizData);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error parsing quiz data: {ex.Message}");
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (_quiz == null) return;
+
+        var submission = new QuizSubmissionDTO
+        {
+            ContentId = Content.Id,
+            Answers = _answers,
+            StartedAt = DateTime.UtcNow
+        };
+
+        try
+        {
+            _quizResult = await Http.PostAsJsonAsync<QuizResultDTO>(
+                $"api/quiz/{Content.Id}/submit", submission);
+
+            _isSubmitted = true;
+            await OnProgressUpdate.InvokeAsync(_quizResult.IsPassed ? 100 : 0);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine(ex);
+        }
+    }
+
+    private void RetryQuiz()
+    {
+        _answers.Clear();
+        _isSubmitted = false;
+        _quizResult = null;
+    }
+}
