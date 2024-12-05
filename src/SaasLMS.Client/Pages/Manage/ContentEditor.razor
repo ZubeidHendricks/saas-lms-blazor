@@ -1,0 +1,165 @@
+@inject HttpClient Http
+
+<div class="bg-white shadow sm:rounded-lg mt-6">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">@(_isEditing ? "Edit Content" : "Add New Content")</h3>
+        
+        <div class="mt-6">
+            <EditForm Model="@_model" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Title</label>
+                        <div class="mt-1">
+                            <InputText @bind-Value="_model.Title" 
+                                      class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                        </div>
+                        <ValidationMessage For="@(() => _model.Title)" class="mt-1 text-sm text-red-600" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Content Type</label>
+                        <div class="mt-1">
+                            <InputSelect @bind-Value="_model.Type"
+                                        class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                                <option value="Video">Video</option>
+                                <option value="Document">Document</option>
+                                <option value="Quiz">Quiz</option>
+                                <option value="Assignment">Assignment</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Order</label>
+                        <div class="mt-1">
+                            <InputNumber @bind-Value="_model.OrderIndex" 
+                                        class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                        </div>
+                        <ValidationMessage For="@(() => _model.OrderIndex)" class="mt-1 text-sm text-red-600" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Content</label>
+                        <div class="mt-1">
+                            @switch (_model.Type)
+                            {
+                                case "Video":
+                                    <div>
+                                        <InputText @bind-Value="_model.ContentData" 
+                                                  placeholder="Enter video URL"
+                                                  class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                                    </div>
+                                    break;
+                                case "Document":
+                                    <div>
+                                        <InputTextArea @bind-Value="_model.ContentData" rows="10"
+                                                      class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                                    </div>
+                                    break;
+                                case "Quiz":
+                                    <QuizEditor @bind-Value="_model.ContentData" />
+                                    break;
+                                case "Assignment":
+                                    <AssignmentEditor @bind-Value="_model.ContentData" />
+                                    break;
+                            }
+                        </div>
+                    </div>
+
+                    @if (_isEditing)
+                    {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Status</label>
+                            <div class="mt-1">
+                                <InputSelect @bind-Value="_model.Status"
+                                            class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                                    <option value="Draft">Draft</option>
+                                    <option value="Published">Published</option>
+                                    <option value="Archived">Archived</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" @onclick="OnCancel"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            @(_isEditing ? "Update Content" : "Add Content")
+                        </button>
+                    </div>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid ModuleId { get; set; }
+
+    [Parameter]
+    public ContentDTO? Content { get; set; }
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private bool _isEditing => Content != null;
+    private UpdateContentDTO _model = new();
+
+    protected override void OnParametersSet()
+    {
+        if (_isEditing && Content != null)
+        {
+            _model = new UpdateContentDTO
+            {
+                Id = Content.Id,
+                Title = Content.Title,
+                Type = Content.Type,
+                ContentData = Content.ContentData,
+                OrderIndex = Content.OrderIndex,
+                Status = Content.Status
+            };
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            if (_isEditing)
+            {
+                var response = await Http.PutAsJsonAsync($"api/modules/{ModuleId}/contents/{Content!.Id}", _model);
+                response.EnsureSuccessStatusCode();
+            }
+            else
+            {
+                var createModel = new CreateContentDTO
+                {
+                    ModuleId = ModuleId,
+                    Title = _model.Title,
+                    Type = _model.Type,
+                    ContentData = _model.ContentData,
+                    OrderIndex = _model.OrderIndex
+                };
+                var response = await Http.PostAsJsonAsync($"api/modules/{ModuleId}/contents", createModel);
+                response.EnsureSuccessStatusCode();
+            }
+
+            await OnSave.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine(ex);
+        }
+    }
+}
