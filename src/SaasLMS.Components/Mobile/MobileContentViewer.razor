@@ -1,0 +1,142 @@
+@using SaasLMS.Core.Content
+@inject IContentService ContentService
+
+<div class="mobile-content-viewer">
+    @if (_content == null)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <div class="content-header">
+            <button class="back-btn" @onclick="NavigateBack">
+                <i class="bi bi-arrow-left"></i>
+            </button>
+            <h2>@_content.Title</h2>
+            <div class="content-actions">
+                @if (_content.Type == ContentType.Video)
+                {
+                    <button class="download-btn @(_isDownloaded ? "downloaded" : "")" 
+                            @onclick="ToggleDownload">
+                        <i class="bi @(_isDownloaded ? "bi-check" : "bi-download")"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="content-body">
+            @switch (_content.Type)
+            {
+                case ContentType.Video:
+                    <MobileVideoPlayer 
+                        Source="@_content.Url" 
+                        Thumbnail="@_content.ThumbnailUrl"
+                        IsOfflineAvailable="@_isDownloaded" />
+                    break;
+
+                case ContentType.Document:
+                    <MobileDocumentViewer 
+                        Source="@_content.Url"
+                        FileType="@_content.FileType" />
+                    break;
+
+                case ContentType.Quiz:
+                    <MobileQuizRunner 
+                        QuizId="@_content.Id"
+                        OnComplete="HandleQuizComplete" />
+                    break;
+            }
+        </div>
+
+        <div class="content-footer">
+            <div class="progress-tracker">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: @(_progress)%"></div>
+                </div>
+                <span class="progress-text">@_progress%</span>
+            </div>
+
+            <div class="navigation-buttons">
+                @if (_previousContent != null)
+                {
+                    <button class="btn btn-outline-primary" 
+                            @onclick="() => NavigateToContent(_previousContent.Id)">
+                        Previous
+                    </button>
+                }
+
+                @if (_nextContent != null)
+                {
+                    <button class="btn btn-primary" 
+                            @onclick="() => NavigateToContent(_nextContent.Id)">
+                        Next
+                    </button>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ContentId { get; set; }
+
+    private CourseContent _content;
+    private CourseContent _previousContent;
+    private CourseContent _nextContent;
+    private bool _isDownloaded;
+    private float _progress;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadContent();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_content?.Id != ContentId)
+        {
+            await LoadContent();
+        }
+    }
+
+    private async Task LoadContent()
+    {
+        _content = await ContentService.GetContentAsync(ContentId);
+        _isDownloaded = await ContentService.IsContentDownloadedAsync(ContentId);
+        _progress = await ContentService.GetContentProgressAsync(ContentId);
+
+        var navigation = await ContentService.GetContentNavigationAsync(ContentId);
+        _previousContent = navigation.Previous;
+        _nextContent = navigation.Next;
+    }
+
+    private async Task ToggleDownload()
+    {
+        if (_isDownloaded)
+        {
+            await ContentService.RemoveDownloadedContentAsync(ContentId);
+        }
+        else
+        {
+            await ContentService.DownloadContentAsync(ContentId);
+        }
+        _isDownloaded = !_isDownloaded;
+    }
+
+    private async Task NavigateToContent(Guid contentId)
+    {
+        ContentId = contentId;
+        await LoadContent();
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo("/course/" + _content.CourseId);
+    }
+
+    private async Task HandleQuizComplete(QuizResult result)
+    {
+        await ContentService.UpdateContentProgressAsync(ContentId, 100);
+        _progress = 100;
+    }
+}

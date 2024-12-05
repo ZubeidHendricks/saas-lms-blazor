@@ -1,0 +1,102 @@
+@using SaasLMS.Core.Navigation
+@inject INavigationService NavigationService
+
+<div class="nav-container @(_isMobileMenuOpen ? "menu-open" : "")">
+    <header class="mobile-header d-md-none">
+        <button class="menu-toggle" @onclick="ToggleMenu">
+            <span class="menu-icon"></span>
+        </button>
+        <img src="@_tenantLogo" alt="Logo" class="mobile-logo" />
+        <div class="mobile-actions">
+            <button class="notification-btn" @onclick="ShowNotifications">
+                <i class="bi bi-bell"></i>
+                @if (_unreadNotifications > 0)
+                {
+                    <span class="notification-badge">@_unreadNotifications</span>
+                }
+            </button>
+        </div>
+    </header>
+
+    <nav class="@(_isMobileMenuOpen ? "show" : "")">
+        <div class="nav-content">
+            <div class="user-profile d-md-none">
+                <img src="@_userAvatar" alt="Profile" class="profile-img" />
+                <div class="profile-info">
+                    <span class="user-name">@_userName</span>
+                    <span class="user-role">@_userRole</span>
+                </div>
+            </div>
+
+            <div class="nav-items">
+                @foreach (var item in _navigationItems)
+                {
+                    <div class="nav-item @(item.IsActive ? "active" : "")">
+                        <a href="@item.Url" class="nav-link" @onclick="() => NavigateTo(item)">
+                            <i class="@item.Icon"></i>
+                            <span class="nav-text">@item.Text</span>
+                        </a>
+                    </div>
+                }
+            </div>
+
+            <div class="nav-footer d-md-none">
+                <button class="btn btn-outline-primary w-100" @onclick="Logout">
+                    <i class="bi bi-box-arrow-right"></i>
+                    Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool _isMobileMenuOpen;
+    private int _unreadNotifications;
+    private string _tenantLogo;
+    private string _userAvatar;
+    private string _userName;
+    private string _userRole;
+    private List<NavigationItem> _navigationItems;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _navigationItems = await NavigationService.GetNavigationItemsAsync();
+        await LoadUserProfile();
+        await LoadNotifications();
+    }
+
+    private void ToggleMenu()
+    {
+        _isMobileMenuOpen = !_isMobileMenuOpen;
+    }
+
+    private async Task NavigateTo(NavigationItem item)
+    {
+        await NavigationService.NavigateToAsync(item.Url);
+        _isMobileMenuOpen = false;
+    }
+
+    private async Task LoadUserProfile()
+    {
+        var profile = await NavigationService.GetUserProfileAsync();
+        _userAvatar = profile.AvatarUrl;
+        _userName = profile.Name;
+        _userRole = profile.Role;
+    }
+
+    private async Task LoadNotifications()
+    {
+        _unreadNotifications = await NavigationService.GetUnreadNotificationCountAsync();
+    }
+
+    private async Task ShowNotifications()
+    {
+        await NavigationService.ShowNotificationsAsync();
+    }
+
+    private async Task Logout()
+    {
+        await NavigationService.LogoutAsync();
+    }
+}
