@@ -1,0 +1,167 @@
+@using SaasLMS.Core.WhiteLabeling
+@inject ITenantThemeService ThemeService
+
+<div class="theme-customizer">
+    <div class="customizer-header">
+        <h2>Theme Customization</h2>
+        <div class="preview-toggle">
+            <button class="btn @(_previewMode ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="TogglePreview">
+                @(_previewMode ? "Exit Preview" : "Preview Changes")
+            </button>
+        </div>
+    </div>
+
+    <div class="customizer-content">
+        <div class="customizer-sidebar">
+            <div class="section">
+                <h3>Brand Colors</h3>
+                <div class="color-picker">
+                    <label>Primary Color</label>
+                    <input type="color" @bind="_theme.PrimaryColor" />
+                </div>
+                <div class="color-picker">
+                    <label>Secondary Color</label>
+                    <input type="color" @bind="_theme.SecondaryColor" />
+                </div>
+                <div class="color-picker">
+                    <label>Accent Color</label>
+                    <input type="color" @bind="_theme.AccentColor" />
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Typography</h3>
+                <div class="font-selector">
+                    <label>Primary Font</label>
+                    <select @bind="_theme.PrimaryFont">
+                        @foreach (var font in _availableFonts)
+                        {
+                            <option value="@font">@font</option>
+                        }
+                    </select>
+                </div>
+                <div class="font-selector">
+                    <label>Heading Font</label>
+                    <select @bind="_theme.HeadingFont">
+                        @foreach (var font in _availableFonts)
+                        {
+                            <option value="@font">@font</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Layout</h3>
+                <div class="layout-settings">
+                    <label>Container Width</label>
+                    <select @bind="_theme.Layout.ContainerWidth">
+                        <option value="1280px">Default (1280px)</option>
+                        <option value="1024px">Narrow (1024px)</option>
+                        <option value="1440px">Wide (1440px)</option>
+                        <option value="100%">Full Width</option>
+                    </select>
+
+                    <div class="switch-group">
+                        <label>Enable Sidebar</label>
+                        <input type="checkbox" @bind="_theme.Layout.EnableSidebar" />
+                    </div>
+
+                    @if (_theme.Layout.EnableSidebar)
+                    {
+                        <div class="radio-group">
+                            <label>Sidebar Position</label>
+                            <div>
+                                <input type="radio" name="sidebarPosition" value="left"
+                                       @bind="_theme.Layout.SidebarPosition" />
+                                <span>Left</span>
+                            </div>
+                            <div>
+                                <input type="radio" name="sidebarPosition" value="right"
+                                       @bind="_theme.Layout.SidebarPosition" />
+                                <span>Right</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Custom CSS</h3>
+                <MonacoEditor @bind-Value="_customCss"
+                             Language="css"
+                             Options="new MonacoEditorOptions { Theme = 'vs-dark' }" />
+            </div>
+        </div>
+
+        <div class="preview-panel">
+            @if (_previewMode)
+            {
+                <iframe src="/theme-preview" class="preview-frame" />
+            }
+            else
+            {
+                <div class="preview-placeholder">
+                    <p>Enable preview mode to see your changes in real-time</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="customizer-footer">
+        <button class="btn btn-secondary" @onclick="ResetChanges">Reset</button>
+        <button class="btn btn-primary" @onclick="SaveChanges">Save Changes</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid TenantId { get; set; }
+
+    private TenantTheme _theme;
+    private bool _previewMode;
+    private string _customCss;
+    private List<string> _availableFonts = new()
+    {
+        "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _theme = await ThemeService.GetThemeAsync(TenantId);
+        _customCss = string.Join("\n", _theme.CustomCss.Values);
+    }
+
+    private void TogglePreview()
+    {
+        _previewMode = !_previewMode;
+    }
+
+    private async Task SaveChanges()
+    {
+        try
+        {
+            _theme.CustomCss["custom"] = _customCss;
+            await ThemeService.UpdateThemeAsync(_theme);
+            await GenerateAndApplyTheme();
+            
+            // Show success notification
+        }
+        catch (Exception ex)
+        {
+            // Show error notification
+        }
+    }
+
+    private async Task ResetChanges()
+    {
+        _theme = await ThemeService.GetThemeAsync(TenantId);
+        _customCss = string.Join("\n", _theme.CustomCss.Values);
+    }
+
+    private async Task GenerateAndApplyTheme()
+    {
+        var css = await ThemeService.GenerateThemeCssAsync(TenantId);
+        await JSRuntime.InvokeVoidAsync("applyThemeStyles", css);
+    }
+}
