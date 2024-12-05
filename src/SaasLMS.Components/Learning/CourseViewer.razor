@@ -1,0 +1,49 @@
+@using SaasLMS.Core.Courses
+@inject ICourseService CourseService
+
+<div class="course-viewer">
+    @if (_course == null)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <div class="course-header">
+            <h1>@_course.Title</h1>
+            <p>@_course.Description</p>
+        </div>
+
+        <div class="course-content">
+            <div class="modules-list">
+                @foreach (var module in _course.Modules.OrderBy(m => m.Order))
+                {
+                    <ModuleCard Module="@module" OnSelect="@(() => SelectModule(module))" />
+                }
+            </div>
+
+            <div class="content-viewer">
+                @if (_selectedModule != null)
+                {
+                    <ModuleViewer Module="@_selectedModule" />
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CourseId { get; set; }
+    private Course _course;
+    private Module _selectedModule;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _course = await CourseService.GetCourseAsync(CourseId);
+        _selectedModule = _course.Modules.OrderBy(m => m.Order).FirstOrDefault();
+    }
+
+    private void SelectModule(Module module)
+    {
+        _selectedModule = module;
+    }
+}

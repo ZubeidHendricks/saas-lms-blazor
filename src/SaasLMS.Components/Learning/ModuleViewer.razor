@@ -1,0 +1,39 @@
+@using SaasLMS.Core.Courses
+
+<div class="module-viewer">
+    <div class="module-header">
+        <h2>@Module.Title</h2>
+        <p>@Module.Description</p>
+    </div>
+
+    <div class="content-list">
+        @foreach (var content in Module.Contents.OrderBy(c => c.Order))
+        {
+            <div class="content-item">
+                @switch (content.Type)
+                {
+                    case ContentType.Video:
+                        <VideoPlayer Content="@content" />
+                        break;
+                    case ContentType.Document:
+                        <DocumentViewer Content="@content" />
+                        break;
+                    case ContentType.Quiz:
+                        <QuizRunner Content="@content" />
+                        break;
+                    default:
+                        <div>Unsupported content type</div>
+                        break;
+                }
+            </div>
+        }
+    </div>
+
+    <div class="module-progress">
+        <ProgressTracker ModuleId="@Module.Id" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public Module Module { get; set; }
+}
