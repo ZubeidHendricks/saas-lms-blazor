@@ -1,0 +1,28 @@
+<div class="relative inline-block">
+    <select @bind="Value"
+            class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+        <option value="day">Today</option>
+        <option value="week">Last 7 days</option>
+        <option value="month">Last 30 days</option>
+        <option value="quarter">Last 3 months</option>
+        <option value="year">Last 12 months</option>
+        <option value="all">All time</option>
+    </select>
+</div>
+
+@code {
+    [Parameter]
+    public string Value { get; set; } = "week";
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    private async Task OnValueChanged(ChangeEventArgs e)
+    {
+        if (e.Value is string value)
+        {
+            Value = value;
+            await ValueChanged.InvokeAsync(value);
+        }
+    }
+}
