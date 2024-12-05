@@ -1,0 +1,52 @@
+@using Lucide.React;
+
+<div class="bg-white overflow-hidden shadow rounded-lg">
+    <div class="p-5">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="rounded-md bg-indigo-500 p-3">
+                    <DynamicIcon Name="@Icon" class="h-6 w-6 text-white" />
+                </div>
+            </div>
+            <div class="ml-5 w-0 flex-1">
+                <dl>
+                    <dt class="text-sm font-medium text-gray-500 truncate">@Title</dt>
+                    <dd class="flex items-baseline">
+                        <div class="text-2xl font-semibold text-gray-900">@Value</div>
+                        @if (!string.IsNullOrEmpty(Change))
+                        {
+                            <div class="ml-2 flex items-baseline text-sm font-semibold @(IsPositiveChange ? "text-green-600" : "text-red-600")">
+                                @if (IsPositiveChange)
+                                {
+                                    <ArrowUp class="self-center flex-shrink-0 h-4 w-4 text-green-500" />
+                                }
+                                else
+                                {
+                                    <ArrowDown class="self-center flex-shrink-0 h-4 w-4 text-red-500" />
+                                }
+                                <span class="sr-only">@(IsPositiveChange ? "Increased" : "Decreased") by</span>
+                                @Change
+                            </div>
+                        }
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public string? Change { get; set; }
+
+    [Parameter]
+    public string Icon { get; set; } = "trending-up";
+
+    private bool IsPositiveChange => !string.IsNullOrEmpty(Change) && Change.StartsWith("+ ");
+}

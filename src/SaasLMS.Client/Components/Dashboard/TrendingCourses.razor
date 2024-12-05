@@ -1,0 +1,56 @@
+<div class="bg-white shadow rounded-lg">
+    <div class="p-6">
+        <h3 class="text-lg font-medium text-gray-900">Trending Courses</h3>
+        <div class="mt-6 flow-root">
+            <ul class="-my-5 divide-y divide-gray-200">
+                @if (Courses != null)
+                {
+                    @foreach (var course in Courses)
+                    {
+                        <li class="py-4">
+                            <div class="flex items-center space-x-4">
+                                <div class="flex-shrink-0">
+                                    <div class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                        <BookOpen class="h-4 w-4 text-indigo-600" />
+                                    </div>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium text-gray-900 truncate">
+                                        @course.Title
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        @course.EnrollmentCount enrollments · @course.Rating.ToString("F1") rating
+                                    </p>
+                                </div>
+                                <div class="text-right text-sm">
+                                    <p class="font-medium text-gray-900">
+                                        $@course.Revenue.ToString("N0")
+                                    </p>
+                                    <p class="text-green-600">
+                                        +@course.RecentEnrollments this month
+                                    </p>
+                                </div>
+                            </div>
+                        </li>
+                    }
+                }
+                else
+                {
+                    <li class="py-4 text-center text-gray-500">
+                        Loading...
+                    </li>
+                }
+            </ul>
+        </div>
+        <div class="mt-6">
+            <a href="courses" class="w-full flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                View all courses
+            </a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<TrendingCourseDTO>? Courses { get; set; }
+}
