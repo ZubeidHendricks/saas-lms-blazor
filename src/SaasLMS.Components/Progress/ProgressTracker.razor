@@ -1,0 +1,60 @@
+@using SaasLMS.Core.Progress
+@inject IProgressService ProgressService
+
+<div class="progress-tracker">
+    @if (_progress == null)
+    {
+        <LoadingSpinner />
+    }
+    else
+    {
+        <div class="overall-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: @(_progress.OverallProgress)%"></div>
+            </div>
+            <span class="progress-text">@(_progress.OverallProgress)% Complete</span>
+        </div>
+
+        <div class="modules-progress">
+            @foreach (var moduleProgress in _progress.ModuleProgress)
+            {
+                <div class="module-progress-item">
+                    <h4>Module Progress</h4>
+                    <div class="progress-bar">
+                        <div class="progress-fill" 
+                             style="width: @(moduleProgress.CompletionPercentage)%"></div>
+                    </div>
+                    <span class="progress-text">
+                        @(moduleProgress.CompletionPercentage)% Complete
+                    </span>
+
+                    <div class="assessment-progress">
+                        @foreach (var attempt in moduleProgress.AssessmentAttempts)
+                        {
+                            <div class="assessment-attempt @(attempt.Passed ? "passed" : "failed")">
+                                <span>Score: @attempt.Score%</span>
+                                <span>@(attempt.Passed ? "Passed" : "Failed")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid CourseId { get; set; }
+    private StudentProgress _progress;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await GetCurrentUserId();
+        _progress = await ProgressService.GetStudentProgressAsync(userId, CourseId);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await OnInitializedAsync();
+    }
+}

@@ -1,0 +1,123 @@
+@using SaasLMS.Core.Assessments
+@using SaasLMS.Core.Progress
+@inject IProgressService ProgressService
+
+<div class="quiz-runner">
+    @if (_currentAttempt == null)
+    {
+        <div class="quiz-start">
+            <h2>@Assessment.Title</h2>
+            <p>@Assessment.Description</p>
+            <div class="quiz-info">
+                <p>Time Limit: @(Assessment.TimeLimit?.ToString() ?? "No time limit")</p>
+                <p>Passing Score: @Assessment.PassingScore%</p>
+                <p>Questions: @Assessment.Questions.Count</p>
+            </div>
+            <button class="btn btn-primary" @onclick="StartQuiz">Start Quiz</button>
+        </div>
+    }
+    else if (!_isCompleted)
+    {
+        <div class="quiz-questions">
+            @if (_currentQuestion < Assessment.Questions.Count)
+            {
+                var question = Assessment.Questions[_currentQuestion];
+                <div class="question">
+                    <h3>Question @(_currentQuestion + 1) of @Assessment.Questions.Count</h3>
+                    <p>@question.Text</p>
+                    
+                    @switch (question.Type)
+                    {
+                        case QuestionType.MultipleChoice:
+                            <MultipleChoiceQuestion 
+                                Question="@question" 
+                                OnAnswer="@(answer => RecordAnswer(question.Id, answer))" />
+                            break;
+                            
+                        case QuestionType.TrueFalse:
+                            <TrueFalseQuestion 
+                                Question="@question" 
+                                OnAnswer="@(answer => RecordAnswer(question.Id, answer))" />
+                            break;
+                            
+                        case QuestionType.ShortAnswer:
+                            <ShortAnswerQuestion 
+                                Question="@question" 
+                                OnAnswer="@(answer => RecordAnswer(question.Id, answer))" />
+                            break;
+                    }
+                </div>
+                
+                <div class="navigation">
+                    @if (_currentQuestion > 0)
+                    {
+                        <button class="btn btn-secondary" @onclick="PreviousQuestion">Previous</button>
+                    }
+                    
+                    @if (_currentQuestion < Assessment.Questions.Count - 1)
+                    {
+                        <button class="btn btn-primary" @onclick="NextQuestion">Next</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success" @onclick="SubmitQuiz">Submit</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <QuizResults Attempt="@_currentAttempt" />
+    }
+</div>
+
+@code {
+    [Parameter] public Assessment Assessment { get; set; }
+    
+    private AssessmentAttempt _currentAttempt;
+    private int _currentQuestion = 0;
+    private bool _isCompleted;
+    private Dictionary<string, string> _answers = new();
+    
+    private async Task StartQuiz()
+    {
+        _currentAttempt = await ProgressService.StartAssessmentAttemptAsync(
+            await GetCurrentUserId(), Assessment.Id);
+        StateHasChanged();
+    }
+    
+    private void RecordAnswer(string questionId, string answer)
+    {
+        _answers[questionId] = answer;
+    }
+    
+    private void NextQuestion()
+    {
+        if (_currentQuestion < Assessment.Questions.Count - 1)
+        {
+            _currentQuestion++;
+        }
+    }
+    
+    private void PreviousQuestion()
+    {
+        if (_currentQuestion > 0)
+        {
+            _currentQuestion--;
+        }
+    }
+    
+    private async Task SubmitQuiz()
+    {
+        var responses = _answers.Select(a => new QuestionResponse
+        {
+            QuestionId = a.Key,
+            Answer = a.Value
+        }).ToList();
+        
+        _currentAttempt = await ProgressService.SubmitAssessmentAttemptAsync(
+            _currentAttempt.Id, responses);
+        _isCompleted = true;
+    }
+}
