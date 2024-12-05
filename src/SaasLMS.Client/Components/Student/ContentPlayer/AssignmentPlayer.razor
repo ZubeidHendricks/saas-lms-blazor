@@ -1,0 +1,294 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="h-full flex flex-col bg-white">
+    <div class="flex-1 overflow-y-auto px-4 py-6">
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl font-bold text-gray-900 mb-4">@Content.Title</h2>
+
+            <!-- Assignment Description -->
+            <div class="prose prose-sm max-w-none mb-8">
+                @((MarkupString)Content.Description)
+            </div>
+
+            @if (Content.DueDate.HasValue)
+            {
+                <div class="mb-8 flex items-center @(IsOverdue ? "text-red-600" : "text-gray-500")">
+                    <Clock class="h-5 w-5 mr-2" />
+                    <span>Due: @Content.DueDate.Value.ToString("MMM dd, yyyy h:mm tt")</span>
+                    @if (IsOverdue)
+                    {
+                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Overdue
+                        </span>
+                    }
+                </div>
+            }
+
+            @if (_submission == null)
+            {
+                <!-- Submission Form -->
+                <EditForm Model="@_model" OnValidSubmit="HandleSubmit">
+                    <DataAnnotationsValidator />
+
+                    <div class="space-y-6">
+                        <!-- Text submission -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Your Answer</label>
+                            <div class="mt-1">
+                                <InputTextArea 
+                                    @bind-Value="_model.Content" 
+                                    rows="8"
+                                    class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                            </div>
+                            <ValidationMessage For="@(() => _model.Content)" class="mt-1 text-sm text-red-600" />
+                        </div>
+
+                        <!-- File upload -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Attachments</label>
+                            <div class="mt-1">
+                                <InputFile 
+                                    OnChange="HandleFileSelected"
+                                    accept=".pdf,.doc,.docx,.txt"
+                                    class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+                            </div>
+                            @if (!string.IsNullOrEmpty(_uploadError))
+                            {
+                                <p class="mt-1 text-sm text-red-600">@_uploadError</p>
+                            }
+                            @if (!string.IsNullOrEmpty(_model.AttachmentUrl))
+                            {
+                                <div class="mt-2 flex items-center space-x-2">
+                                    <Paperclip class="h-5 w-5 text-gray-400" />
+                                    <span class="text-sm text-gray-500">@Path.GetFileName(_model.AttachmentUrl)</span>
+                                    <button 
+                                        @onclick="RemoveAttachment" 
+                                        type="button"
+                                        class="text-sm text-red-600 hover:text-red-500">
+                                        Remove
+                                    </button>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="flex justify-end space-x-3">
+                            <button 
+                                @onclick="SaveDraft"
+                                type="button"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Save Draft
+                            </button>
+                            <button 
+                                type="submit"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Submit Assignment
+                            </button>
+                        </div>
+                    </div>
+                </EditForm>
+            }
+            else
+            {
+                <!-- Submission Details -->
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <CheckCircle class="h-5 w-5 text-green-500 mr-2" />
+                            <span class="text-sm font-medium text-gray-900">Submitted @_submission.SubmittedAt.ToString("MMM dd, yyyy h:mm tt")</span>
+                        </div>
+                        @if (_submission.Status == AssignmentStatus.InReview)
+                        {
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                In Review
+                            </span>
+                        }
+                        else if (_submission.Status == AssignmentStatus.Graded)
+                        {
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Graded
+                            </span>
+                        }
+                    </div>
+
+                    @if (_submission.Status == AssignmentStatus.Graded)
+                    {
+                        <div class="mt-4 border-t border-gray-200 pt-4">
+                            <div class="flex items-center">
+                                <span class="text-sm font-medium text-gray-700">Score:</span>
+                                <span class="ml-2 text-sm text-gray-900">@_submission.Score%</span>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_submission.ReviewNotes))
+                            {
+                                <div class="mt-2">
+                                    <span class="text-sm font-medium text-gray-700">Instructor Feedback:</span>
+                                    <p class="mt-1 text-sm text-gray-900">@_submission.ReviewNotes</p>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="mt-4 border-t border-gray-200 pt-4">
+                        <h4 class="text-sm font-medium text-gray-700">Your Submission</h4>
+                        <div class="mt-2 bg-white rounded-md p-4">
+                            <p class="text-sm text-gray-900 whitespace-pre-wrap">@_submission.Content</p>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_submission.AttachmentUrl))
+                        {
+                            <div class="mt-4 flex items-center space-x-2">
+                                <Paperclip class="h-5 w-5 text-gray-400" />
+                                <a href="@_submission.AttachmentUrl"
+                                   target="_blank"
+                                   class="text-sm text-indigo-600 hover:text-indigo-500">
+                                    Download Attachment
+                                </a>
+                            </div>
+                        }
+                    </div>
+
+                    @if (_submission.Status != AssignmentStatus.Graded && !IsOverdue)
+                    {
+                        <div class="mt-4 flex justify-end">
+                            <button 
+                                @onclick="ResubmitAssignment"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Resubmit Assignment
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public ContentDTO Content { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<float> OnProgressUpdate { get; set; }
+
+    private AssignmentSubmissionDTO? _submission;
+    private AssignmentSubmissionDTO _model = new();
+    private string? _uploadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubmissionAsync();
+    }
+
+    private async Task LoadSubmissionAsync()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<ResponseDTO<AssignmentSubmissionDTO>>(
+                $"api/assignments/{Content.Id}/submission");
+
+            if (response?.Success == true)
+            {
+                _submission = response.Data;
+                if (_submission?.Status == AssignmentStatus.Graded)
+                {
+                    await OnProgressUpdate.InvokeAsync(100);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading submission: {ex.Message}");
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _uploadError = null;
+            var file = e.File;
+            if (file != null)
+            {
+                if (file.Size > 10 * 1024 * 1024) // 10MB limit
+                {
+                    _uploadError = "File size must be less than 10MB";
+                    return;
+                }
+
+                // Upload file
+                var content = new MultipartFormDataContent();
+                var fileContent = new StreamContent(file.OpenReadStream());
+                content.Add(fileContent, "file", file.Name);
+
+                var response = await Http.PostAsync("api/files/upload", content);
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<ResponseDTO<string>>();
+                    if (result?.Success == true)
+                    {
+                        _model.AttachmentUrl = result.Data;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _uploadError = "Error uploading file. Please try again.";
+            Console.WriteLine($"Error uploading file: {ex.Message}");
+        }
+    }
+
+    private void RemoveAttachment()
+    {
+        _model.AttachmentUrl = null;
+    }
+
+    private async Task SaveDraft()
+    {
+        try
+        {
+            _model.Status = AssignmentStatus.Draft;
+            var response = await Http.PostAsJsonAsync($"api/assignments/{Content.Id}/draft", _model);
+            if (response.IsSuccessStatusCode)
+            {
+                // Show success message
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving draft: {ex.Message}");
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            _model.Status = AssignmentStatus.Submitted;
+            var response = await Http.PostAsJsonAsync($"api/assignments/{Content.Id}/submit", _model);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadSubmissionAsync();
+                await OnProgressUpdate.InvokeAsync(50); // Partial progress until graded
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error submitting assignment: {ex.Message}");
+        }
+    }
+
+    private void ResubmitAssignment()
+    {
+        if (_submission != null)
+        {
+            _model = new AssignmentSubmissionDTO
+            {
+                Content = _submission.Content,
+                AttachmentUrl = _submission.AttachmentUrl
+            };
+            _submission = null;
+        }
+    }
+
+    private bool IsOverdue => Content.DueDate.HasValue && Content.DueDate.Value < DateTime.UtcNow;
+}
