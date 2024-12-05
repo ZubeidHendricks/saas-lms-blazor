@@ -1,0 +1,79 @@
+@using Recharts
+
+<div class="bg-white shadow rounded-lg p-6">
+    <h3 class="text-lg font-medium text-gray-900 mb-4">User Activity Heatmap</h3>
+    <div class="h-64">
+        @if (Data != null)
+        {
+            <div class="grid grid-cols-53 gap-1">
+                @foreach (var week in Enumerable.Range(0, 52))
+                {
+                    <div class="grid grid-rows-7 gap-1">
+                        @foreach (var day in Enumerable.Range(0, 7))
+                        {
+                            var date = StartDate.AddDays(week * 7 + day);
+                            var value = GetActivityValue(date);
+                            <div 
+                                class="w-3 h-3 rounded-sm @GetActivityColor(value)" 
+                                title="@GetTooltip(date, value)"
+                            />
+                        }
+                    </div>
+                }
+            </div>
+            <div class="mt-4 flex items-center justify-end space-x-2 text-sm">
+                <span class="text-gray-500">Less</span>
+                @foreach (var level in Enumerable.Range(0, 5))
+                {
+                    <div class="w-3 h-3 rounded-sm @GetActivityColor(level)" />
+                }
+                <span class="text-gray-500">More</span>
+            </div>
+        }
+        else
+        {
+            <div class="h-full flex items-center justify-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Dictionary<DateTime, int>? Data { get; set; }
+
+    private DateTime StartDate => DateTime.Today.AddDays(-364);
+
+    private int GetActivityValue(DateTime date)
+    {
+        if (Data?.TryGetValue(date, out var value) ?? false)
+        {
+            return value switch
+            {
+                0 => 0,
+                <= 5 => 1,
+                <= 10 => 2,
+                <= 20 => 3,
+                _ => 4
+            };
+        }
+        return 0;
+    }
+
+    private string GetActivityColor(int value) => value switch
+    {
+        0 => "bg-gray-100",
+        1 => "bg-indigo-100",
+        2 => "bg-indigo-300",
+        3 => "bg-indigo-500",
+        4 => "bg-indigo-700",
+        _ => "bg-gray-100"
+    };
+
+    private string GetTooltip(DateTime date, int value)
+    {
+        var count = Data?.GetValueOrDefault(date) ?? 0;
+        return $"{date:MMM d, yyyy}: {count} activities";
+    }
+}
