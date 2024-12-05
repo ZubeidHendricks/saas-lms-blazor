@@ -1,0 +1,44 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="w-full h-full">
+    @switch (Content.Type)
+    {
+        case "Video":
+            <VideoPlayer Content="@Content" OnProgressUpdate="HandleProgressUpdate" />
+            break;
+
+        case "Document":
+            <DocumentViewer Content="@Content" OnProgressUpdate="HandleProgressUpdate" />
+            break;
+
+        case "Quiz":
+            <QuizPlayer Content="@Content" OnProgressUpdate="HandleProgressUpdate" />
+            break;
+
+        case "Assignment":
+            <AssignmentViewer Content="@Content" OnProgressUpdate="HandleProgressUpdate" />
+            break;
+
+        default:
+            <div class="flex items-center justify-center h-full text-gray-500">
+                Unsupported content type
+            </div>
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentDTO Content { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<(Guid ContentId, float Progress)> OnProgressUpdate { get; set; }
+
+    private async Task HandleProgressUpdate(float progress)
+    {
+        if (OnProgressUpdate.HasDelegate)
+        {
+            await OnProgressUpdate.InvokeAsync((Content.Id, progress));
+        }
+    }
+}

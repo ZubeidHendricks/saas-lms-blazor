@@ -1,0 +1,92 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="flex flex-col h-full">
+    <div class="relative" style="padding-top: 56.25%">
+        @if (IsValidVideoUrl())
+        {
+            <iframe src="@GetEmbedUrl()"
+                    class="absolute inset-0 w-full h-full"
+                    frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+            </iframe>
+        }
+        else
+        {
+            <div class="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500">
+                Invalid video URL
+            </div>
+        }
+    </div>
+
+    <div class="mt-4 px-4">
+        <h2 class="text-lg font-medium text-gray-900">@Content.Title</h2>
+        <div class="mt-2 flex items-center">
+            <div class="flex-1 bg-gray-200 rounded-full h-2">
+                <div class="bg-indigo-600 h-2 rounded-full"
+                     style="width: @(_progress)%"></div>
+            </div>
+            <span class="ml-2 text-sm text-gray-500">@_progress%</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentDTO Content { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<float> OnProgressUpdate { get; set; }
+
+    private float _progress;
+    private System.Timers.Timer? _progressTimer;
+
+    protected override void OnInitialized()
+    {
+        // Simulate video progress
+        _progressTimer = new System.Timers.Timer(1000);
+        _progressTimer.Elapsed += async (sender, e) =>
+        {
+            if (_progress < 100)
+            {
+                _progress += 1;
+                await InvokeAsync(StateHasChanged);
+                await OnProgressUpdate.InvokeAsync(_progress);
+            }
+            else
+            {
+                _progressTimer.Stop();
+            }
+        };
+        _progressTimer.Start();
+    }
+
+    public void Dispose()
+    {
+        _progressTimer?.Dispose();
+    }
+
+    private bool IsValidVideoUrl()
+    {
+        return !string.IsNullOrWhiteSpace(Content.ContentData) &&
+               (Content.ContentData.Contains("youtube.com") || 
+                Content.ContentData.Contains("vimeo.com"));
+    }
+
+    private string GetEmbedUrl()
+    {
+        // Convert YouTube or Vimeo URLs to embed URLs
+        if (Content.ContentData.Contains("youtube.com"))
+        {
+            var videoId = Content.ContentData.Split('v=').Last();
+            return $"https://www.youtube.com/embed/{videoId}";
+        }
+        else if (Content.ContentData.Contains("vimeo.com"))
+        {
+            var videoId = Content.ContentData.Split('/').Last();
+            return $"https://player.vimeo.com/video/{videoId}";
+        }
+
+        return Content.ContentData;
+    }
+}

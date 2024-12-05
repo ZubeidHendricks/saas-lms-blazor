@@ -1,0 +1,64 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="h-full flex flex-col">
+    <div class="flex-1 overflow-y-auto px-4 py-6 prose prose-sm max-w-none">
+        @((MarkupString)ParseMarkdown())
+    </div>
+
+    <div class="p-4 border-t border-gray-200 bg-white">
+        <div class="flex items-center">
+            <div class="flex-1 bg-gray-200 rounded-full h-2">
+                <div class="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                     style="width: @_progress%"></div>
+            </div>
+            <span class="ml-2 text-sm text-gray-500">@_progress%</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentDTO Content { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<float> OnProgressUpdate { get; set; }
+
+    private float _progress;
+    private bool _hasReachedBottom;
+
+    protected override void OnInitialized()
+    {
+        // Start with some progress for opening the document
+        _progress = 10;
+        OnProgressUpdate.InvokeAsync(_progress);
+    }
+
+    private string ParseMarkdown()
+    {
+        try
+        {
+            // Here you would use a Markdown parser
+            // For now, we'll just return the content as-is with basic HTML
+            return Content.ContentData.Replace("\n", "<br>");
+        }
+        catch
+        {
+            return Content.ContentData;
+        }
+    }
+
+    private async Task HandleScroll(EventArgs args)
+    {
+        // Update progress based on scroll position
+        if (!_hasReachedBottom)
+        {
+            _progress = Math.Min(100, _progress + 10);
+            await OnProgressUpdate.InvokeAsync(_progress);
+
+            if (_progress >= 100)
+            {
+                _hasReachedBottom = true;
+            }
+        }
+    }
+}
