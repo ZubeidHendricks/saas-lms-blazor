@@ -1,0 +1,123 @@
+@page "/manage/courses/create"
+@page "/manage/courses/{CourseId:guid}/edit"
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Instructor,TenantAdmin")]
+
+<div class="bg-white shadow sm:rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <h3 class="text-lg font-medium leading-6 text-gray-900">@(_isEditing ? "Edit Course" : "Create New Course")</h3>
+        
+        <div class="mt-6">
+            <EditForm Model="@_model" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Title</label>
+                        <div class="mt-1">
+                            <InputText @bind-Value="_model.Title" 
+                                      class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                        </div>
+                        <ValidationMessage For="@(() => _model.Title)" class="mt-1 text-sm text-red-600" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Description</label>
+                        <div class="mt-1">
+                            <InputTextArea @bind-Value="_model.Description" rows="4"
+                                          class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" />
+                        </div>
+                        <ValidationMessage For="@(() => _model.Description)" class="mt-1 text-sm text-red-600" />
+                    </div>
+
+                    @if (_isEditing)
+                    {
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Status</label>
+                            <div class="mt-1">
+                                <InputSelect @bind-Value="_model.Status"
+                                            class="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md">
+                                    <option value="Draft">Draft</option>
+                                    <option value="Published">Published</option>
+                                    <option value="Archived">Archived</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" @onclick="Cancel"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            @(_isEditing ? "Update Course" : "Create Course")
+                        </button>
+                    </div>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? CourseId { get; set; }
+
+    private bool _isEditing => CourseId.HasValue;
+    private UpdateCourseDTO _model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_isEditing)
+        {
+            var response = await Http.GetFromJsonAsync<ResponseDTO<CourseDTO>>($"api/courses/{CourseId}");
+            if (response?.Success == true && response.Data != null)
+            {
+                _model = new UpdateCourseDTO
+                {
+                    Id = response.Data.Id,
+                    Title = response.Data.Title,
+                    Description = response.Data.Description,
+                    Status = response.Data.Status
+                };
+            }
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            if (_isEditing)
+            {
+                var response = await Http.PutAsJsonAsync($"api/courses/{CourseId}", _model);
+                response.EnsureSuccessStatusCode();
+            }
+            else
+            {
+                var createModel = new CreateCourseDTO
+                {
+                    Title = _model.Title,
+                    Description = _model.Description
+                };
+                var response = await Http.PostAsJsonAsync("api/courses", createModel);
+                response.EnsureSuccessStatusCode();
+            }
+
+            Navigation.NavigateTo("/manage/courses");
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine(ex);
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/manage/courses");
+    }
+}
