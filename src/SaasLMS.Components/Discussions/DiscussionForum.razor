@@ -1,0 +1,94 @@
+@using SaasLMS.Core.Discussions
+@inject IDiscussionService DiscussionService
+
+<div class="discussion-forum">
+    <div class="forum-header">
+        <h2>Course Discussions</h2>
+        @if (!IsLocked)
+        {
+            <button class="btn btn-primary" @onclick="() => _showNewDiscussion = true">
+                New Discussion
+            </button>
+        }
+    </div>
+
+    @if (_showNewDiscussion)
+    {
+        <NewDiscussionForm OnSubmit="CreateDiscussion" OnCancel="() => _showNewDiscussion = false" />
+    }
+
+    <div class="discussions-list">
+        @if (_pinnedDiscussions?.Any() == true)
+        {
+            <div class="pinned-discussions">
+                <h3>Pinned Discussions</h3>
+                @foreach (var discussion in _pinnedDiscussions)
+                {
+                    <DiscussionCard Discussion="@discussion" OnSelect="@(() => SelectDiscussion(discussion))" />
+                }
+            </div>
+        }
+
+        <div class="regular-discussions">
+            @if (_discussions == null)
+            {
+                <LoadingSpinner />
+            }
+            else
+            {
+                @foreach (var discussion in _discussions.Where(d => !d.IsPinned))
+                {
+                    <DiscussionCard Discussion="@discussion" OnSelect="@(() => SelectDiscussion(discussion))" />
+                }
+            }
+        </div>
+    </div>
+
+    @if (_selectedDiscussion != null)
+    {
+        <DiscussionDetail 
+            Discussion="@_selectedDiscussion" 
+            OnClose="@(() => _selectedDiscussion = null)" 
+            OnComment="@AddComment" />
+    }
+</div>
+
+@code {
+    [Parameter] public Guid CourseId { get; set; }
+    [Parameter] public bool IsLocked { get; set; }
+
+    private List<Discussion> _discussions;
+    private List<Discussion> _pinnedDiscussions;
+    private Discussion _selectedDiscussion;
+    private bool _showNewDiscussion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDiscussions();
+    }
+
+    private async Task LoadDiscussions()
+    {
+        _discussions = await DiscussionService.GetDiscussionsAsync(CourseId);
+        _pinnedDiscussions = _discussions.Where(d => d.IsPinned).ToList();
+    }
+
+    private async Task CreateDiscussion(Discussion discussion)
+    {
+        discussion.CourseId = CourseId;
+        await DiscussionService.CreateDiscussionAsync(discussion);
+        _showNewDiscussion = false;
+        await LoadDiscussions();
+    }
+
+    private void SelectDiscussion(Discussion discussion)
+    {
+        _selectedDiscussion = discussion;
+    }
+
+    private async Task AddComment(Comment comment)
+    {
+        await DiscussionService.AddCommentAsync(_selectedDiscussion.Id, comment);
+        _selectedDiscussion = await DiscussionService.GetDiscussionAsync(_selectedDiscussion.Id);
+    }
+}

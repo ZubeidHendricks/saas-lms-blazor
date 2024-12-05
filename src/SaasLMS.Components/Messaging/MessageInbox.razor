@@ -1,0 +1,94 @@
+@using SaasLMS.Core.Messaging
+@inject IMessageService MessageService
+
+<div class="message-inbox">
+    <div class="inbox-header">
+        <h2>Messages</h2>
+        <button class="btn btn-primary" @onclick="() => _showNewMessage = true">
+            New Message
+        </button>
+    </div>
+
+    <div class="inbox-content">
+        <div class="message-list">
+            @if (_messages == null)
+            {
+                <LoadingSpinner />
+            }
+            else
+            {
+                @foreach (var message in _messages)
+                {
+                    <MessageCard 
+                        Message="@message" 
+                        IsSelected="@(_selectedMessage?.Id == message.Id)" 
+                        OnSelect="@(() => SelectMessage(message))" />
+                }
+            }
+        </div>
+
+        <div class="message-detail">
+            @if (_selectedMessage != null)
+            {
+                <MessageDetail Message="@_selectedMessage" OnReply="ReplyToMessage" />
+            }
+            else
+            {
+                <div class="no-message-selected">
+                    <p>Select a message to view</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_showNewMessage)
+    {
+        <NewMessageForm OnSubmit="SendMessage" OnCancel="() => _showNewMessage = false" />
+    }
+</div>
+
+@code {
+    private List<Message> _messages;
+    private Message _selectedMessage;
+    private bool _showNewMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMessages();
+    }
+
+    private async Task LoadMessages()
+    {
+        _messages = await MessageService.GetMessagesAsync();
+    }
+
+    private async Task SendMessage(Message message)
+    {
+        await MessageService.SendMessageAsync(message);
+        _showNewMessage = false;
+        await LoadMessages();
+    }
+
+    private void SelectMessage(Message message)
+    {
+        _selectedMessage = message;
+        _ = MarkAsRead(message);
+    }
+
+    private async Task MarkAsRead(Message message)
+    {
+        if (message.ReadAt == null)
+        {
+            await MessageService.MarkAsReadAsync(message.Id);
+            await LoadMessages();
+        }
+    }
+
+    private async Task ReplyToMessage(Message reply)
+    {
+        reply.RecipientId = _selectedMessage.SenderId;
+        reply.Subject = $"Re: {_selectedMessage.Subject}";
+        await MessageService.SendMessageAsync(reply);
+        await LoadMessages();
+    }
+}
