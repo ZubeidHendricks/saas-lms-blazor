@@ -1,0 +1,92 @@
+@using SaasLMS.Core.Courses
+@inject ICourseEnrollmentService EnrollmentService
+@inject IPaymentService PaymentService
+
+<div class="enrollment-flow">
+    @if (_currentStep == EnrollmentStep.Details)
+    {
+        <div class="course-details">
+            <h2>@Course.Title</h2>
+            <div class="course-info">
+                <p>@Course.Description</p>
+                <div class="price-info">
+                    <span class="price">@Course.Price.ToString("C")</span>
+                </div>
+            </div>
+            <button class="btn btn-primary" @onclick="() => SetStep(EnrollmentStep.Payment)">
+                Enroll Now
+            </button>
+        </div>
+    }
+    else if (_currentStep == EnrollmentStep.Payment)
+    {
+        <div class="payment-form">
+            <h3>Payment Details</h3>
+            <PaymentForm 
+                Amount="@Course.Price"
+                OnPaymentSuccess="HandlePaymentSuccess"
+                OnPaymentFailure="HandlePaymentFailure" />
+        </div>
+    }
+    else if (_currentStep == EnrollmentStep.Confirmation)
+    {
+        <div class="enrollment-confirmation">
+            <div class="success-message">
+                <i class="bi bi-check-circle"></i>
+                <h3>Successfully Enrolled!</h3>
+                <p>You can now start learning.</p>
+            </div>
+            <button class="btn btn-primary" @onclick="StartLearning">
+                Start Course
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Course Course { get; set; }
+    [Parameter] public EventCallback<CourseEnrollment> OnEnrollmentComplete { get; set; }
+
+    private EnrollmentStep _currentStep = EnrollmentStep.Details;
+    private CourseEnrollment _enrollment;
+
+    private void SetStep(EnrollmentStep step)
+    {
+        _currentStep = step;
+    }
+
+    private async Task HandlePaymentSuccess(string transactionId)
+    {
+        try
+        {
+            _enrollment = await EnrollmentService.EnrollStudentAsync(
+                Course.Id, 
+                await GetCurrentUserId(),
+                transactionId);
+
+            SetStep(EnrollmentStep.Confirmation);
+            await OnEnrollmentComplete.InvokeAsync(_enrollment);
+        }
+        catch (Exception ex)
+        {
+            // Handle enrollment error
+        }
+    }
+
+    private void HandlePaymentFailure(string error)
+    {
+        // Handle payment failure
+    }
+
+    private void StartLearning()
+    {
+        NavigationManager.NavigateTo($"/course/{Course.Id}/learn");
+    }
+}
+
+public enum EnrollmentStep
+{
+    Details,
+    Payment,
+    Confirmation
+}

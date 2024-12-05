@@ -1,0 +1,133 @@
+@using SaasLMS.Core.Courses
+@inject IAssignmentService AssignmentService
+
+<div class="assignment-submission">
+    <div class="assignment-header">
+        <h2>@Assignment.Title</h2>
+        <div class="due-date">
+            <i class="bi bi-calendar"></i>
+            Due: @Assignment.DueDate.ToLocalTime().ToString("g")
+        </div>
+    </div>
+
+    <div class="assignment-description">
+        @Assignment.Description
+    </div>
+
+    @if (_previousSubmissions?.Any() == true)
+    {
+        <div class="previous-submissions">
+            <h4>Previous Submissions</h4>
+            @foreach (var submission in _previousSubmissions)
+            {
+                <div class="submission-item">
+                    <div class="submission-info">
+                        <span>Submitted: @submission.SubmittedAt.ToLocalTime().ToString("g")</span>
+                        @if (submission.Grade.HasValue)
+                        {
+                            <span class="grade">Grade: @submission.Grade.Value / @Assignment.MaxScore</span>
+                        }
+                    </div>
+                    <div class="submission-files">
+                        @foreach (var file in submission.Files)
+                        {
+                            <a href="@file.Url" target="_blank" class="file-link">
+                                <i class="bi bi-file-earmark"></i>
+                                @file.FileName
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (CanSubmit)
+    {
+        <div class="submission-form">
+            <InputFile OnChange="HandleFileSelection" multiple accept="@GetAllowedFileTypes()" />
+            
+            @if (_selectedFiles?.Any() == true)
+            {
+                <div class="selected-files">
+                    @foreach (var file in _selectedFiles)
+                    {
+                        <div class="file-item">
+                            <span>@file.Name</span>
+                            <button class="btn btn-sm btn-danger" @onclick="() => RemoveFile(file)">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+
+            <button class="btn btn-primary" 
+                    @onclick="SubmitAssignment"
+                    disabled="@(!_selectedFiles?.Any() == true)">
+                Submit Assignment
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="submission-closed">
+            <p>Submissions are no longer accepted for this assignment.</p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public CourseAssignment Assignment { get; set; }
+    [Parameter] public EventCallback<AssignmentSubmission> OnSubmissionComplete { get; set; }
+
+    private List<AssignmentSubmission> _previousSubmissions;
+    private List<IBrowserFile> _selectedFiles;
+    private bool CanSubmit => Assignment.DueDate > DateTime.UtcNow;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviousSubmissions();
+    }
+
+    private async Task LoadPreviousSubmissions()
+    {
+        _previousSubmissions = await AssignmentService.GetSubmissionsAsync(
+            Assignment.Id, 
+            await GetCurrentUserId());
+    }
+
+    private void HandleFileSelection(InputFileChangeEventArgs e)
+    {
+        _selectedFiles = e.GetMultipleFiles().ToList();
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        _selectedFiles.Remove(file);
+    }
+
+    private string GetAllowedFileTypes()
+    {
+        return string.Join(",", Assignment.AllowedFileTypes);
+    }
+
+    private async Task SubmitAssignment()
+    {
+        try
+        {
+            var submission = await AssignmentService.SubmitAssignmentAsync(
+                Assignment.Id,
+                await GetCurrentUserId(),
+                _selectedFiles);
+
+            await OnSubmissionComplete.InvokeAsync(submission);
+            await LoadPreviousSubmissions();
+            _selectedFiles = null;
+        }
+        catch (Exception ex)
+        {
+            // Handle submission error
+        }
+    }
+}
