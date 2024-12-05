@@ -1,0 +1,123 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="bg-white shadow rounded-lg">
+    <div class="px-4 py-5 sm:p-6">
+        <div class="sm:flex sm:items-center">
+            <div class="sm:flex-auto">
+                <h3 class="text-lg font-medium text-gray-900">Course Performance</h3>
+                <p class="mt-2 text-sm text-gray-700">A list of all your courses and their performance metrics.</p>
+            </div>
+            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+                <button @onclick="ExportData" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    <Download class="-ml-1 mr-2 h-4 w-4" />
+                    Export
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-6 flex flex-col">
+            <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                <div class="inline-block min-w-full py-2 align-middle px-4 sm:px-6 lg:px-8">
+                    <table class="min-w-full divide-y divide-gray-300">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">
+                                    Course Name
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    Enrollments
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    Completion Rate
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    Rating
+                                </th>
+                                <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                                    Revenue
+                                </th>
+                                <th scope="col" class="relative py-3.5 pl-3 pr-4 sm:pr-0">
+                                    <span class="sr-only">Actions</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            @if (Courses != null)
+                            {
+                                @foreach (var course in Courses)
+                                {
+                                    <tr>
+                                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0">
+                                            @course.Title
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            @course.EnrollmentCount.ToString("N0")
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            <div class="flex items-center">
+                                                <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                                    <div class="bg-indigo-600 h-2 rounded-full" style="width: @($"{course.CompletionRate}%")"></div>
+                                                </div>
+                                                <span>@($"{course.CompletionRate:N1}%")</span>
+                                            </div>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            <div class="flex items-center">
+                                                <Star class="h-4 w-4 text-yellow-400 fill-current" />
+                                                <span class="ml-1">@course.Rating.ToString("N1")</span>
+                                            </div>
+                                        </td>
+                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                            $@course.Revenue.ToString("N2")
+                                        </td>
+                                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                                            <button @onclick="() => ViewCourse(course.Id)" class="text-indigo-600 hover:text-indigo-900">View</button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-gray-500">
+                                        Loading...
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<CoursePerformanceDTO>? Courses { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnCourseSelected { get; set; }
+
+    private void ViewCourse(Guid courseId)
+    {
+        OnCourseSelected.InvokeAsync(courseId);
+    }
+
+    private async Task ExportData()
+    {
+        if (Courses == null) return;
+
+        // Convert data to CSV format
+        var csv = new StringBuilder();
+        csv.AppendLine("Course,Enrollments,Completion Rate,Rating,Revenue");
+
+        foreach (var course in Courses)
+        {
+            csv.AppendLine($"\"{course.Title}\",{course.EnrollmentCount},{course.CompletionRate:N1}%,{course.Rating:N1},${course.Revenue:N2}");
+        }
+
+        // Download file
+        await JSRuntime.InvokeVoidAsync("downloadFile", "course-performance.csv", "text/csv", csv.ToString());
+    }
+}
