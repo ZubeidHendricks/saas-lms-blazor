@@ -1,0 +1,15 @@
+@inject IThemeService ThemeService
+
+<CascadingValue Value="ThemeService.CurrentTheme">
+    @ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ThemeService.InitializeAsync();
+    }
+}
