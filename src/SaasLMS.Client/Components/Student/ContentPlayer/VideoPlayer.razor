@@ -1,0 +1,104 @@
+@using SaasLMS.Shared.DTOs
+
+<div class="h-full flex flex-col bg-black">
+    <!-- Video Container -->
+    <div class="flex-1 relative">
+        @if (IsValidVideoUrl())
+        {
+            <iframe 
+                src="@GetEmbedUrl()"
+                class="absolute inset-0 w-full h-full"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen>
+            </iframe>
+        }
+        else
+        {
+            <div class="absolute inset-0 flex items-center justify-center text-white">
+                <p>Invalid video URL</p>
+            </div>
+        }
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="bg-gray-900 p-4">
+        <div class="flex items-center">
+            <div class="flex-1">
+                <div class="bg-gray-700 rounded-full h-2">
+                    <div 
+                        class="bg-indigo-500 h-2 rounded-full transition-all duration-300"
+                        style="width: @(_progress)%">
+                    </div>
+                </div>
+            </div>
+            <span class="ml-2 text-sm text-gray-300">@_progress%</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentDTO Content { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<float> OnProgressUpdate { get; set; }
+
+    private float _progress;
+    private System.Timers.Timer? _progressTimer;
+    private DateTime _startTime;
+
+    protected override void OnInitialized()
+    {
+        _startTime = DateTime.UtcNow;
+        SetupProgressTracking();
+    }
+
+    private void SetupProgressTracking()
+    {
+        _progressTimer = new System.Timers.Timer(1000); // Update every second
+        _progressTimer.Elapsed += async (sender, e) =>
+        {
+            var timeSpent = (DateTime.UtcNow - _startTime).TotalSeconds;
+            var totalDuration = Content.Duration * 60; // Convert minutes to seconds
+            _progress = Math.Min((float)(timeSpent / totalDuration * 100), 100);
+
+            await InvokeAsync(StateHasChanged);
+            await OnProgressUpdate.InvokeAsync(_progress);
+
+            if (_progress >= 100)
+            {
+                _progressTimer.Stop();
+            }
+        };
+        _progressTimer.Start();
+    }
+
+    private bool IsValidVideoUrl()
+    {
+        return !string.IsNullOrWhiteSpace(Content.VideoUrl) &&
+               (Content.VideoUrl.Contains("youtube.com") ||
+                Content.VideoUrl.Contains("vimeo.com"));
+    }
+
+    private string GetEmbedUrl()
+    {
+        if (Content.VideoUrl.Contains("youtube.com"))
+        {
+            var videoId = Content.VideoUrl.Split('v=').Last();
+            return $"https://www.youtube.com/embed/{videoId}?autoplay=1&enablejsapi=1";
+        }
+        else if (Content.VideoUrl.Contains("vimeo.com"))
+        {
+            var videoId = Content.VideoUrl.Split('/').Last();
+            return $"https://player.vimeo.com/video/{videoId}?autoplay=1";
+        }
+
+        return Content.VideoUrl;
+    }
+
+    public void Dispose()
+    {
+        _progressTimer?.Dispose();
+    }
+}
