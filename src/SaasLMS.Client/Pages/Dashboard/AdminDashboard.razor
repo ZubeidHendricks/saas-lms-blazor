@@ -1,0 +1,134 @@
+@page "/admin/dashboard"
+@using SaasLMS.Client.Components.Dashboard
+@inject IDashboardService DashboardService
+
+<div class="min-h-screen bg-gray-100">
+    <div class="py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+            <h1 class="text-2xl font-semibold text-gray-900">Dashboard</h1>
+        </div>
+        
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8">
+            <!-- Quick stats cards -->
+            <div class="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <QuickStatsCard 
+                    Title="Total Users" 
+                    Value="@_dashboardData?.QuickStats.TotalUsers.ToString("N0")"
+                    Change="+12.5%"
+                    Icon="users" />
+                
+                <QuickStatsCard 
+                    Title="Active Courses" 
+                    Value="@_dashboardData?.QuickStats.TotalCourses.ToString("N0")"
+                    Change="+5.25%"
+                    Icon="book-open" />
+                
+                <QuickStatsCard 
+                    Title="Revenue" 
+                    Value="@($"${_dashboardData?.QuickStats.TotalRevenue:N2}")"
+                    Change="+8.3%"
+                    Icon="dollar-sign" />
+                
+                <QuickStatsCard 
+                    Title="Active Users" 
+                    Value="@_dashboardData?.QuickStats.ActiveUsers.ToString("N0")"
+                    Change="+2.7%"
+                    Icon="user-check" />
+            </div>
+
+            <!-- Charts grid -->
+            <div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <!-- Revenue chart -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-medium text-gray-900">Revenue Overview</h3>
+                            <TimeframeSelector @bind-Value="_selectedTimeframe" />
+                        </div>
+                        <div class="mt-4">
+                            <RevenueChart Data="@_dashboardData?.RevenueOverview" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Enrollment trend -->
+                <div class="bg-white overflow-hidden shadow rounded-lg">
+                    <div class="p-5">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-medium text-gray-900">Enrollment Trend</h3>
+                            <TimeframeSelector @bind-Value="_selectedTimeframe" />
+                        </div>
+                        <div class="mt-4">
+                            <EnrollmentChart Data="@_dashboardData?.EnrollmentTrend" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trending courses and top instructors -->
+            <div class="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <TrendingCourses Courses="@_dashboardData?.TrendingCourses" />
+                <TopInstructors Instructors="@_dashboardData?.TopInstructors" />
+            </div>
+
+            <!-- Recent activity -->
+            <div class="mt-8">
+                <RecentActivity Activities="@_dashboardData?.RecentActivities" />
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private DashboardDTO? _dashboardData;
+    private string _selectedTimeframe = "week";
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardDataAsync();
+        await SetupRealtimeUpdates();
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        try
+        {
+            _dashboardData = await DashboardService.GetDashboardDataAsync(_selectedTimeframe);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine(ex);
+        }
+    }
+
+    private async Task SetupRealtimeUpdates()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/dashboardHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<DashboardUpdateDTO>("ReceiveUpdate", update =>
+        {
+            // Update dashboard data
+            if (_dashboardData != null)
+            {
+                _dashboardData.QuickStats = update.QuickStats;
+                _dashboardData.RevenueOverview = update.RevenueOverview;
+                StateHasChanged();
+            }
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}
