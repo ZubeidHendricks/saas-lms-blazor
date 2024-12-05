@@ -1,0 +1,64 @@
+<div class="bg-white shadow rounded-lg">
+    <div class="p-6">
+        <h3 class="text-lg font-medium text-gray-900">Top Instructors</h3>
+        <div class="mt-6 flow-root">
+            <ul class="-my-5 divide-y divide-gray-200">
+                @if (Instructors != null)
+                {
+                    @foreach (var instructor in Instructors)
+                    {
+                        <li class="py-4">
+                            <div class="flex items-center space-x-4">
+                                <div class="flex-shrink-0">
+                                    @if (!string.IsNullOrEmpty(instructor.AvatarUrl))
+                                    {
+                                        <img class="h-8 w-8 rounded-full" src="@instructor.AvatarUrl" alt="@instructor.Name" />
+                                    }
+                                    else
+                                    {
+                                        <div class="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                            <span class="text-indigo-600 font-medium">@instructor.Name[0]</span>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium text-gray-900 truncate">
+                                        @instructor.Name
+                                    </p>
+                                    <p class="text-sm text-gray-500">
+                                        @instructor.TotalCourses courses · @instructor.TotalStudents students
+                                    </p>
+                                </div>
+                                <div class="text-right text-sm">
+                                    <p class="font-medium text-gray-900">
+                                        $@instructor.Revenue.ToString("N0")
+                                    </p>
+                                    <div class="flex items-center justify-end mt-1">
+                                        <Star class="h-4 w-4 text-yellow-400 fill-current" />
+                                        <span class="ml-1 text-gray-500">@instructor.AverageRating.ToString("F1")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    }
+                }
+                else
+                {
+                    <li class="py-4 text-center text-gray-500">
+                        Loading...
+                    </li>
+                }
+            </ul>
+        </div>
+        <div class="mt-6">
+            <a href="instructors" class="w-full flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                View all instructors
+            </a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<TopInstructorDTO>? Instructors { get; set; }
+}
