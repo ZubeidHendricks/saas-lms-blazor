@@ -1,0 +1,149 @@
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="recording-actions">
+                        <a href="@_recording.DownloadUrl" class="btn btn-outline-primary">
+                            <i class="bi bi-download"></i>
+                            Download Recording
+                        </a>
+                        @if (_transcript == null)
+                        {
+                            <button class="btn btn-outline-primary" @onclick="GenerateTranscript">
+                                <i class="bi bi-file-text"></i>
+                                Generate Transcript
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid ModuleId { get; set; }
+    [Parameter] public EventCallback<Meeting> OnSessionScheduled { get; set; }
+
+    private Meeting _session;
+    private MeetingRecording _recording;
+    private List<TranscriptSegment> _transcript;
+    private TimeSpan _countdown;
+    private Timer _timer;
+    private IRecordingTranscriptionService _transcriptionService;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSession();
+        StartCountdown();
+    }
+
+    private async Task LoadSession()
+    {
+        try
+        {
+            var moduleSession = await _dbContext.ModuleSessions
+                .FirstOrDefaultAsync(s => s.ModuleId == ModuleId);
+
+            if (moduleSession != null)
+            {
+                var service = VideoConferencingFactory.GetService(moduleSession.Platform);
+                _session = await service.GetMeetingDetailsAsync(moduleSession.MeetingId);
+
+                if (_session.Status == MeetingStatus.Completed)
+                {
+                    _recording = await service.GetRecordingAsync(_session.Id);
+                    _transcript = await _transcriptionService.GetSearchableTranscriptAsync(_recording.Id);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void StartCountdown()
+    {
+        if (_session?.StartTime > DateTime.UtcNow)
+        {
+            _timer = new Timer(async _ =>
+            {
+                _countdown = _session.StartTime - DateTime.UtcNow;
+                if (_countdown.TotalSeconds <= 0)
+                {
+                    await LoadSession(); // Refresh session status
+                }
+                await InvokeAsync(StateHasChanged);
+            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        }
+    }
+
+    private async Task HandleMeetingScheduled(Meeting meeting)
+    {
+        try
+        {
+            var moduleSession = new ModuleSession
+            {
+                ModuleId = ModuleId,
+                MeetingId = meeting.Id,
+                Platform = meeting.Platform,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _dbContext.ModuleSessions.Add(moduleSession);
+            await _dbContext.SaveChangesAsync();
+
+            _session = meeting;
+            StartCountdown();
+
+            await OnSessionScheduled.InvokeAsync(meeting);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private async Task HandleMeetingEnd(Meeting meeting)
+    {
+        await LoadSession();
+    }
+
+    private async Task GenerateTranscript()
+    {
+        try
+        {
+            await _transcriptionService.GenerateTranscriptAsync(_recording.Id);
+            _transcript = await _transcriptionService.GetSearchableTranscriptAsync(_recording.Id);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private void AddToCalendar()
+    {
+        var calendarUrl = $"https://www.google.com/calendar/render?action=TEMPLATE&text={Uri.EscapeDataString(_session.Topic)}&dates={_session.StartTime:yyyyMMddTHHmmssZ}/{_session.StartTime.AddMinutes(_session.DurationMinutes):yyyyMMddTHHmmssZ}&details={Uri.EscapeDataString($"Join URL: {_session.JoinUrl}")}";
+        JS.InvokeVoidAsync("open", calendarUrl, "_blank");
+    }
+
+    private string GetPlatformIcon(MeetingPlatform platform) => platform switch
+    {
+        MeetingPlatform.Zoom => "bi-camera-video",
+        MeetingPlatform.Teams => "bi-microsoft",
+        _ => "bi-camera-video"
+    };
+
+    private string FormatTimestamp(TimeSpan time)
+    {
+        return time.ToString(@"hh\:mm\:ss");
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}
