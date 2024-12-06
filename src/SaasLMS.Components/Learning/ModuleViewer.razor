@@ -1,39 +1,167 @@
-@using SaasLMS.Core.Courses
-
-<div class="module-viewer">
-    <div class="module-header">
-        <h2>@Module.Title</h2>
-        <p>@Module.Description</p>
-    </div>
-
-    <div class="content-list">
-        @foreach (var content in Module.Contents.OrderBy(c => c.Order))
-        {
-            <div class="content-item">
-                @switch (content.Type)
-                {
-                    case ContentType.Video:
-                        <VideoPlayer Content="@content" />
-                        break;
-                    case ContentType.Document:
-                        <DocumentViewer Content="@content" />
-                        break;
-                    case ContentType.Quiz:
-                        <QuizRunner Content="@content" />
-                        break;
-                    default:
-                        <div>Unsupported content type</div>
-                        break;
-                }
-            </div>
-        }
-    </div>
-
-    <div class="module-progress">
-        <ProgressTracker ModuleId="@Module.Id" />
-    </div>
-</div>
-
 @code {
-    [Parameter] public Module Module { get; set; }
+    [Parameter] public Guid ModuleId { get; set; }
+    [Parameter] public EventCallback<Module> OnModuleComplete { get; set; }
+
+    private Module _module;
+    private int _currentContentIndex;
+    private Content _currentContent;
+    private HashSet<Guid> _completedContent = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadModule();
+        await LoadProgress();
+        SelectContent(0);
+    }
+
+    private async Task LoadModule()
+    {
+        _module = await ModuleService.GetModuleAsync(ModuleId);
+        _module.Contents = _module.Contents.OrderBy(c => c.Order).ToList();
+    }
+
+    private async Task LoadProgress()
+    {
+        var progress = await ProgressService.GetContentProgressAsync(
+            await GetCurrentUserId(),
+            ModuleId);
+
+        _completedContent = new HashSet<Guid>(progress.CompletedContentIds);
+    }
+
+    private void SelectContent(int index)
+    {
+        if (index < 0 || index >= _module.Contents.Count)
+            return;
+
+        // Check if sequential progression is required
+        if (_module.RequiresSequential && index > 0)
+        {
+            var previousContent = _module.Contents[index - 1];
+            if (!IsContentCompleted(previousContent))
+                return;
+        }
+
+        _currentContentIndex = index;
+        _currentContent = _module.Contents[index];
+    }
+
+    private async Task HandleContentComplete()
+    {
+        await MarkContentComplete(_currentContent.Id);
+
+        if (_currentContentIndex == _module.Contents.Count - 1)
+        {
+            await CompleteModule();
+        }
+        else
+        {
+            await NextContent();
+        }
+    }
+
+    private async Task HandleQuizComplete(QuizResult result)
+    {
+        if (result.Passed)
+        {
+            await MarkContentComplete(_currentContent.Id);
+            if (_currentContentIndex == _module.Contents.Count - 1)
+            {
+                await CompleteModule();
+            }
+        }
+    }
+
+    private async Task HandleAssignmentComplete(AssignmentSubmission submission)
+    {
+        await MarkContentComplete(_currentContent.Id);
+        if (!_currentContent.Assignment.RequiresGrading)
+        {
+            if (_currentContentIndex == _module.Contents.Count - 1)
+            {
+                await CompleteModule();
+            }
+        }
+    }
+
+    private async Task MarkContentComplete(Guid contentId)
+    {
+        await ProgressService.MarkContentCompleteAsync(
+            await GetCurrentUserId(),
+            ModuleId,
+            contentId);
+
+        _completedContent.Add(contentId);
+    }
+
+    private async Task CompleteModule()
+    {
+        await ProgressService.CompleteModuleAsync(
+            await GetCurrentUserId(),
+            ModuleId);
+
+        await OnModuleComplete.InvokeAsync(_module);
+    }
+
+    private async Task NextContent()
+    {
+        if (_currentContentIndex < _module.Contents.Count - 1)
+        {
+            SelectContent(_currentContentIndex + 1);
+        }
+    }
+
+    private void PreviousContent()
+    {
+        if (_currentContentIndex > 0)
+        {
+            SelectContent(_currentContentIndex - 1);
+        }
+    }
+
+    private bool IsContentCompleted(Content content)
+    {
+        return _completedContent.Contains(content.Id);
+    }
+
+    private bool IsNextDisabled()
+    {
+        if (_currentContentIndex == _module.Contents.Count - 1)
+            return false;
+
+        if (_currentContent.RequiresCompletion && !IsContentCompleted(_currentContent))
+            return true;
+
+        return false;
+    }
+
+    private void NavigateBack()
+    {
+        NavigationManager.NavigateTo($"/course/{_module.CourseId}");
+    }
+
+    private string GetContentIcon(ContentType type) => type switch
+    {
+        ContentType.Video => "bi-play-circle",
+        ContentType.Document => "bi-file-text",
+        ContentType.Quiz => "bi-question-circle",
+        ContentType.Assignment => "bi-pencil-square",
+        _ => "bi-file"
+    };
+
+    private string GetResourceIcon(ResourceType type) => type switch
+    {
+        ResourceType.PDF => "bi-file-pdf",
+        ResourceType.Document => "bi-file-word",
+        ResourceType.Spreadsheet => "bi-file-excel",
+        ResourceType.Link => "bi-link",
+        _ => "bi-file"
+    };
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+            return $"{Math.Ceiling(duration.TotalHours)}h";
+        return $"{duration.Minutes}m";
+    }
 }

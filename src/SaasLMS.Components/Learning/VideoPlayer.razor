@@ -1,0 +1,233 @@
+@using SaasLMS.Core.Learning
+@inject IVideoService VideoService
+
+<div class="video-player @(_isFullscreen ? "fullscreen" : "")">
+    <div class="player-container" @ref="_playerContainer">
+        <video @ref="_videoElement"
+               class="video-element"
+               poster="@Thumbnail"
+               @onplay="HandlePlay"
+               @onpause="HandlePause"
+               @ontimeupdate="HandleTimeUpdate"
+               @onended="HandleEnded">
+            <source src="@Source" type="@_videoType" />
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="player-controls @(_isControlsVisible ? "visible" : "")">
+            <div class="progress-bar" @onclick="SeekVideo">
+                <div class="progress-fill" style="width: @(_progress)%"></div>
+                <div class="progress-hover" style="left: @(_hoverProgress)%"></div>
+            </div>
+
+            <div class="controls-main">
+                <button class="control-button" @onclick="TogglePlayPause">
+                    <i class="bi @(_isPlaying ? "bi-pause" : "bi-play")"></i>
+                </button>
+
+                <div class="time-display">
+                    <span>@FormatTime(_currentTime)</span>
+                    <span>/</span>
+                    <span>@FormatTime(_duration)</span>
+                </div>
+
+                <div class="volume-control">
+                    <button class="control-button" @onclick="ToggleMute">
+                        <i class="bi @GetVolumeIcon()"></i>
+                    </button>
+                    <input type="range"
+                           min="0"
+                           max="100"
+                           @bind="_volume"
+                           @bind:event="oninput" />
+                </div>
+
+                <div class="playback-speed">
+                    <select @bind="_playbackSpeed">
+                        <option value="0.5">0.5x</option>
+                        <option value="1">1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                    </select>
+                </div>
+
+                <button class="control-button" @onclick="ToggleFullscreen">
+                    <i class="bi @(_isFullscreen ? "bi-fullscreen-exit" : "bi-fullscreen")"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (_showCompletionMessage)
+    {
+        <div class="completion-message">
+            <div class="message-content">
+                <i class="bi bi-check-circle-fill"></i>
+                <p>Video Completed!</p>
+                <button class="btn btn-primary" @onclick="HandleCompletion">
+                    Continue
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Source { get; set; }
+    [Parameter] public string Thumbnail { get; set; }
+    [Parameter] public EventCallback OnComplete { get; set; }
+
+    private ElementReference _videoElement;
+    private ElementReference _playerContainer;
+    private bool _isPlaying;
+    private bool _isFullscreen;
+    private bool _isControlsVisible = true;
+    private double _progress;
+    private double _hoverProgress;
+    private double _currentTime;
+    private double _duration;
+    private double _volume = 100;
+    private double _playbackSpeed = 1;
+    private string _videoType;
+    private bool _showCompletionMessage;
+    private Timer _controlsTimer;
+
+    protected override void OnInitialized()
+    {
+        _videoType = DetermineVideoType(Source);
+        _controlsTimer = new Timer(HideControls, null, Timeout.Infinite, Timeout.Infinite);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initVideoPlayer", _videoElement, DotNetObjectReference.Create(this));
+        }
+    }
+
+    private string DetermineVideoType(string source)
+    {
+        var extension = Path.GetExtension(source).ToLower();
+        return extension switch
+        {
+            ".mp4" => "video/mp4",
+            ".webm" => "video/webm",
+            ".ogg" => "video/ogg",
+            _ => "video/mp4"
+        };
+    }
+
+    private async Task TogglePlayPause()
+    {
+        if (_isPlaying)
+        {
+            await JS.InvokeVoidAsync("pauseVideo", _videoElement);
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("playVideo", _videoElement);
+        }
+    }
+
+    private void HandlePlay()
+    {
+        _isPlaying = true;
+        ShowControls();
+    }
+
+    private void HandlePause()
+    {
+        _isPlaying = false;
+        ShowControls();
+    }
+
+    private void HandleTimeUpdate()
+    {
+        // Update progress
+        ShowControls();
+    }
+
+    private async Task HandleEnded()
+    {
+        _isPlaying = false;
+        _showCompletionMessage = true;
+        await VideoService.RecordViewAsync(Source, await GetCurrentUserId());
+    }
+
+    private async Task HandleCompletion()
+    {
+        _showCompletionMessage = false;
+        await OnComplete.InvokeAsync();
+    }
+
+    private void ShowControls()
+    {
+        _isControlsVisible = true;
+        _controlsTimer?.Change(3000, Timeout.Infinite);
+    }
+
+    private void HideControls(object state)
+    {
+        if (_isPlaying)
+        {
+            _isControlsVisible = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SeekVideo(MouseEventArgs e)
+    {
+        var seekPosition = CalculateSeekPosition(e);
+        await JS.InvokeVoidAsync("seekVideo", _videoElement, seekPosition);
+    }
+
+    private double CalculateSeekPosition(MouseEventArgs e)
+    {
+        // Calculate seek position based on click position
+        return 0;
+    }
+
+    private string GetVolumeIcon()
+    {
+        if (_volume == 0) return "bi-volume-mute";
+        if (_volume < 50) return "bi-volume-down";
+        return "bi-volume-up";
+    }
+
+    private void ToggleMute()
+    {
+        if (_volume > 0)
+        {
+            _volume = 0;
+        }
+        else
+        {
+            _volume = 100;
+        }
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        if (_isFullscreen)
+        {
+            await JS.InvokeVoidAsync("exitFullscreen");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("requestFullscreen", _playerContainer);
+        }
+        _isFullscreen = !_isFullscreen;
+    }
+
+    private string FormatTime(double seconds)
+    {
+        var timeSpan = TimeSpan.FromSeconds(seconds);
+        return timeSpan.ToString(@"mm\:ss");
+    }
+
+    public void Dispose()
+    {
+        _controlsTimer?.Dispose();
+    }
+}
