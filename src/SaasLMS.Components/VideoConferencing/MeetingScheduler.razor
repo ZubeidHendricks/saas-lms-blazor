@@ -1,0 +1,176 @@
+@using SaasLMS.Core.Integration.VideoConferencing
+@inject IVideoConferencingFactory VideoConferencingFactory
+
+<div class="meeting-scheduler">
+    <div class="scheduler-header">
+        <h2>Schedule Meeting</h2>
+    </div>
+
+    <EditForm Model="@_meetingRequest" OnValidSubmit="ScheduleMeeting">
+        <DataAnnotationsValidator />
+
+        <div class="form-group">
+            <label>Platform</label>
+            <select @bind="_meetingRequest.Platform" class="form-control">
+                <option value="@MeetingPlatform.Zoom">Zoom</option>
+                <option value="@MeetingPlatform.Teams">Microsoft Teams</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Topic</label>
+            <InputText @bind-Value="_meetingRequest.Topic" class="form-control" />
+            <ValidationMessage For="@(() => _meetingRequest.Topic)" />
+        </div>
+
+        <div class="form-group">
+            <label>Start Time</label>
+            <InputDateTime @bind-Value="_meetingRequest.StartTime" class="form-control" />
+            <ValidationMessage For="@(() => _meetingRequest.StartTime)" />
+        </div>
+
+        <div class="form-group">
+            <label>Duration (minutes)</label>
+            <InputNumber @bind-Value="_meetingRequest.DurationMinutes" class="form-control" />
+            <ValidationMessage For="@(() => _meetingRequest.DurationMinutes)" />
+        </div>
+
+        <div class="form-group">
+            <label>Host Email</label>
+            <InputText @bind-Value="_meetingRequest.HostEmail" class="form-control" />
+            <ValidationMessage For="@(() => _meetingRequest.HostEmail)" />
+        </div>
+
+        <div class="form-group">
+            <label>Time Zone</label>
+            <InputSelect @bind-Value="_meetingRequest.TimeZone" class="form-control">
+                @foreach (var timezone in _timeZones)
+                {
+                    <option value="@timezone.Id">@timezone.DisplayName</option>
+                }
+            </InputSelect>
+        </div>
+
+        <div class="settings-section">
+            <h3>Meeting Settings</h3>
+
+            <div class="form-check">
+                <InputCheckbox @bind-Value="_meetingRequest.Settings.MuteUponEntry" class="form-check-input" />
+                <label class="form-check-label">Mute participants upon entry</label>
+            </div>
+
+            <div class="form-check">
+                <InputCheckbox @bind-Value="_meetingRequest.EnableWaitingRoom" class="form-check-input" />
+                <label class="form-check-label">Enable waiting room</label>
+            </div>
+
+            <div class="form-check">
+                <InputCheckbox @bind-Value="_meetingRequest.EnableRecording" class="form-check-input" />
+                <label class="form-check-label">Record meeting</label>
+            </div>
+
+            <div class="form-check">
+                <InputCheckbox @bind-Value="_meetingRequest.Settings.EnableChat" class="form-check-input" />
+                <label class="form-check-label">Enable chat</label>
+            </div>
+
+            <div class="form-check">
+                <InputCheckbox @bind-Value="_meetingRequest.Settings.EnableBreakoutRooms" class="form-check-input" />
+                <label class="form-check-label">Enable breakout rooms</label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" disabled="@_isScheduling">
+                @if (_isScheduling)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span>Scheduling...</span>
+                }
+                else
+                {
+                    <span>Schedule Meeting</span>
+                }
+            </button>
+        </div>
+    </EditForm>
+
+    @if (_scheduledMeeting != null)
+    {
+        <div class="meeting-confirmation">
+            <div class="alert alert-success">
+                <h4>Meeting Scheduled!</h4>
+                <p>Share these details with your participants:</p>
+
+                <div class="meeting-details">
+                    <div class="detail-item">
+                        <span class="label">Join URL:</span>
+                        <span class="value">
+                            <a href="@_scheduledMeeting.JoinUrl" target="_blank">@_scheduledMeeting.JoinUrl</a>
+                            <button class="btn btn-sm btn-link" @onclick="() => CopyToClipboard(_scheduledMeeting.JoinUrl)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </span>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_scheduledMeeting.Password))
+                    {
+                        <div class="detail-item">
+                            <span class="label">Password:</span>
+                            <span class="value">
+                                @_scheduledMeeting.Password
+                                <button class="btn btn-sm btn-link" @onclick="() => CopyToClipboard(_scheduledMeeting.Password)">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public EventCallback<Meeting> OnMeetingScheduled { get; set; }
+
+    private MeetingRequest _meetingRequest = new()
+    {
+        StartTime = DateTime.Now.AddHours(1),
+        DurationMinutes = 60,
+        TimeZone = TimeZoneInfo.Local.Id,
+        Settings = new()
+        {
+            MuteUponEntry = true,
+            EnableChat = true
+        }
+    };
+
+    private bool _isScheduling;
+    private Meeting _scheduledMeeting;
+    private List<TimeZoneInfo> _timeZones = TimeZoneInfo.GetSystemTimeZones().ToList();
+
+    private async Task ScheduleMeeting()
+    {
+        try
+        {
+            _isScheduling = true;
+            var service = VideoConferencingFactory.GetService(_meetingRequest.Platform);
+            _scheduledMeeting = await service.CreateMeetingAsync(_meetingRequest);
+            await OnMeetingScheduled.InvokeAsync(_scheduledMeeting);
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isScheduling = false;
+        }
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+    }
+}
