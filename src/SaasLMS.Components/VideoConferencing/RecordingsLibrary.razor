@@ -1,0 +1,247 @@
+@using SaasLMS.Core.Integration.VideoConferencing
+@inject IVideoConferencingFactory VideoConferencingFactory
+
+<div class="recordings-library">
+    <div class="library-header">
+        <h3>Meeting Recordings</h3>
+        <div class="filter-controls">
+            <select @bind="_selectedPlatform" class="form-select">
+                <option value="">All Platforms</option>
+                <option value="@MeetingPlatform.Zoom">Zoom</option>
+                <option value="@MeetingPlatform.Teams">Microsoft Teams</option>
+            </select>
+
+            <div class="date-range">
+                <input type="date" 
+                       @bind="_startDate" 
+                       class="form-control" 
+                       max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+                <span>to</span>
+                <input type="date" 
+                       @bind="_endDate" 
+                       class="form-control"
+                       max="@DateTime.Today.ToString("yyyy-MM-dd")" />
+            </div>
+
+            <button class="btn btn-primary" @onclick="LoadRecordings">
+                Apply Filters
+            </button>
+        </div>
+    </div>
+
+    <div class="recordings-grid">
+        @if (_isLoading)
+        {
+            <div class="loading-state">
+                <LoadingSpinner />
+                <p>Loading recordings...</p>
+            </div>
+        }
+        else if (!_recordings.Any())
+        {
+            <div class="empty-state">
+                <i class="bi bi-camera-video"></i>
+                <p>No recordings found</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var recording in _recordings)
+            {
+                <div class="recording-card">
+                    <div class="recording-preview" @onclick="() => PlayRecording(recording)">
+                        <div class="preview-overlay">
+                            <i class="bi bi-play-circle"></i>
+                        </div>
+                        <img src="@GetThumbnailUrl(recording)" alt="Recording thumbnail" />
+                    </div>
+
+                    <div class="recording-info">
+                        <div class="meeting-details">
+                            <h4>@recording.MeetingTitle</h4>
+                            <span class="platform-badge @GetPlatformClass(recording.Platform)">
+                                @recording.Platform
+                            </span>
+                        </div>
+
+                        <div class="recording-meta">
+                            <span class="date">
+                                <i class="bi bi-calendar"></i>
+                                @recording.RecordingStart.ToLocalTime().ToString("MMM dd, yyyy")
+                            </span>
+                            <span class="duration">
+                                <i class="bi bi-clock"></i>
+                                @FormatDuration(recording.RecordingEnd - recording.RecordingStart)
+                            </span>
+                            <span class="size">
+                                <i class="bi bi-hdd"></i>
+                                @FormatFileSize(recording.FileSize)
+                            </span>
+                        </div>
+
+                        <div class="recording-actions">
+                            <button class="btn btn-primary btn-sm" 
+                                    @onclick="() => PlayRecording(recording)">
+                                <i class="bi bi-play-fill"></i>
+                                Play
+                            </button>
+                            <a href="@recording.DownloadUrl" 
+                               class="btn btn-outline-primary btn-sm"
+                               download>
+                                <i class="bi bi-download"></i>
+                                Download
+                            </a>
+                            <button class="btn btn-outline-danger btn-sm" 
+                                    @onclick="() => DeleteRecording(recording)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    @if (_selectedRecording != null)
+    {
+        <div class="recording-player">
+            <div class="player-header">
+                <h4>@_selectedRecording.MeetingTitle</h4>
+                <button class="btn-close" @onclick="ClosePlayer"></button>
+            </div>
+
+            <div class="video-container">
+                <video controls autoplay
+                       src="@_selectedRecording.PlayUrl"
+                       poster="@GetThumbnailUrl(_selectedRecording)">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string CourseId { get; set; }
+
+    private bool _isLoading;
+    private List<MeetingRecording> _recordings = new();
+    private MeetingRecording _selectedRecording;
+    private MeetingPlatform? _selectedPlatform;
+    private DateTime _startDate = DateTime.Today.AddDays(-30);
+    private DateTime _endDate = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRecordings();
+    }
+
+    private async Task LoadRecordings()
+    {
+        try
+        {
+            _isLoading = true;
+            _recordings.Clear();
+
+            var platforms = _selectedPlatform.HasValue
+                ? new[] { _selectedPlatform.Value }
+                : new[] { MeetingPlatform.Zoom, MeetingPlatform.Teams };
+
+            foreach (var platform in platforms)
+            {
+                var service = VideoConferencingFactory.GetService(platform);
+                var meetings = await service.GetMeetingsByDateRangeAsync(
+                    CourseId,
+                    _startDate,
+                    _endDate);
+
+                foreach (var meeting in meetings.Where(m => m.Status == MeetingStatus.Completed))
+                {
+                    var recording = await service.GetRecordingAsync(meeting.Id);
+                    if (recording != null)
+                    {
+                        recording.MeetingTitle = meeting.Topic;
+                        recording.Platform = platform;
+                        _recordings.Add(recording);
+                    }
+                }
+            }
+
+            _recordings = _recordings
+                .OrderByDescending(r => r.RecordingStart)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void PlayRecording(MeetingRecording recording)
+    {
+        _selectedRecording = recording;
+    }
+
+    private void ClosePlayer()
+    {
+        _selectedRecording = null;
+    }
+
+    private async Task DeleteRecording(MeetingRecording recording)
+    {
+        try
+        {
+            var service = VideoConferencingFactory.GetService(recording.Platform);
+            await service.DeleteRecordingAsync(recording.Id);
+            _recordings.Remove(recording);
+
+            if (_selectedRecording?.Id == recording.Id)
+            {
+                _selectedRecording = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private string GetThumbnailUrl(MeetingRecording recording)
+    {
+        // Generate or return thumbnail URL based on platform
+        return "/images/video-thumbnail-placeholder.png";
+    }
+
+    private string GetPlatformClass(MeetingPlatform platform) => platform switch
+    {
+        MeetingPlatform.Zoom => "platform-zoom",
+        MeetingPlatform.Teams => "platform-teams",
+        _ => ""
+    };
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
+            ? $"{Math.Floor(duration.TotalHours)}h {duration.Minutes}m"
+            : $"{duration.Minutes}m";
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        int order = 0;
+        double size = bytes;
+
+        while (size >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            size /= 1024;
+        }
+
+        return $"{size:0.#} {sizes[order]}";
+    }
+}
