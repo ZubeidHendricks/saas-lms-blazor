@@ -1,0 +1,114 @@
+.platform-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.platform-zoom {
+    background: #2D8CFF;
+    color: white;
+}
+
+.platform-teams {
+    background: #6264A7;
+    color: white;
+}
+
+.recording-meta {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+.recording-meta i {
+    margin-right: 0.25rem;
+}
+
+.recording-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Recording Player */
+.recording-player {
+    position: fixed;
+    inset: 2rem;
+    background: var(--modal-bg);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+}
+
+.player-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.player-header .btn-close {
+    font-size: 1.5rem;
+    padding: 0.5rem;
+    cursor: pointer;
+}
+
+.video-container {
+    flex: 1;
+    background: #000;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.video-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .meeting-scheduler {
+        padding: 1rem;
+    }
+
+    .meeting-info {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .recordings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .recording-player {
+        inset: 0;
+        border-radius: 0;
+    }
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+    .meeting-scheduler,
+    .recording-card {
+        background: var(--dark-card-bg);
+    }
+
+    .recording-player {
+        background: var(--dark-modal-bg);
+    }
+
+    .settings-section {
+        background: var(--dark-bg-subtle);
+    }
+}
