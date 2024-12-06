@@ -1,0 +1,203 @@
+@using SaasLMS.Core.Communication
+@inject IChatService ChatService
+
+<div class="chat-widget @(_isExpanded ? "expanded" : "")">
+    <div class="chat-header" @onclick="ToggleExpand">
+        <span>Chat</span>
+        @if (_unreadCount > 0)
+        {
+            <span class="unread-badge">@_unreadCount</span>
+        }
+        <button class="expand-button">
+            <i class="bi @(_isExpanded ? "bi-chevron-down" : "bi-chevron-up")"></i>
+        </button>
+    </div>
+
+    @if (_isExpanded)
+    {
+        <div class="chat-content">
+            <div class="conversations-list">
+                @foreach (var conversation in _conversations)
+                {
+                    <div class="conversation-item @(_selectedConversation?.Id == conversation.Id ? "selected" : "")"
+                         @onclick="() => SelectConversation(conversation)">
+                        <div class="conversation-info">
+                            <span class="title">@GetConversationTitle(conversation)</span>
+                            <span class="last-message">@GetLastMessagePreview(conversation)</span>
+                        </div>
+                        @if (HasUnreadMessages(conversation))
+                        {
+                            <div class="unread-indicator"></div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_selectedConversation != null)
+            {
+                <div class="chat-messages">
+                    <div class="messages-container" @ref="_messagesContainer">
+                        @foreach (var message in _selectedConversation.Messages)
+                        {
+                            <div class="message @(IsOwnMessage(message) ? "own" : "other")">
+                                <div class="message-content">
+                                    @message.Content
+                                </div>
+                                <div class="message-meta">
+                                    <span class="time">@FormatTime(message.SentAt)</span>
+                                    @if (IsOwnMessage(message))
+                                    {
+                                        <span class="status">
+                                            @if (message.ReadBy.Any())
+                                            {
+                                                <i class="bi bi-check2-all"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-check2"></i>
+                                            }
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="message-input">
+                        <input type="text" 
+                               placeholder="Type a message..."
+                               @bind="_newMessage"
+                               @bind:event="oninput"
+                               @onkeyup="HandleKeyPress" />
+                        <button class="btn btn-primary" 
+                                @onclick="SendMessage"
+                                disabled="@string.IsNullOrEmpty(_newMessage)">
+                            <i class="bi bi-send"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _isExpanded;
+    private List<ChatConversation> _conversations;
+    private ChatConversation _selectedConversation;
+    private string _newMessage;
+    private int _unreadCount;
+    private ElementReference _messagesContainer;
+    private string _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentUserId = await GetCurrentUserId();
+        await LoadConversations();
+        await SetupSignalR();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_messagesContainer.Context != null)
+        {
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task LoadConversations()
+    {
+        _conversations = await ChatService.GetConversationsAsync(_currentUserId);
+        _unreadCount = _conversations.Sum(c => GetUnreadCount(c));
+    }
+
+    private void ToggleExpand()
+    {
+        _isExpanded = !_isExpanded;
+    }
+
+    private async Task SelectConversation(ChatConversation conversation)
+    {
+        _selectedConversation = conversation;
+        await ChatService.MarkConversationAsReadAsync(conversation.Id, _currentUserId);
+        await LoadConversations(); // Refresh unread count
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrEmpty(_newMessage)) return;
+
+        var message = new ChatMessage
+        {
+            ConversationId = _selectedConversation.Id,
+            SenderId = _currentUserId,
+            Content = _newMessage,
+            SentAt = DateTime.UtcNow
+        };
+
+        await ChatService.SendMessageAsync(message);
+        _newMessage = string.Empty;
+    }
+
+    private async Task HandleKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await JS.InvokeVoidAsync("scrollToBottom", _messagesContainer);
+    }
+
+    private string GetConversationTitle(ChatConversation conversation)
+    {
+        if (conversation.Type == ConversationType.OneToOne)
+        {
+            var otherParticipant = conversation.Participants
+                .First(p => p != _currentUserId);
+            return "Chat with " + otherParticipant; // You might want to get the actual user name
+        }
+        return conversation.Title;
+    }
+
+    private string GetLastMessagePreview(ChatConversation conversation)
+    {
+        var lastMessage = conversation.Messages.LastOrDefault();
+        if (lastMessage == null) return string.Empty;
+        return TruncateText(lastMessage.Content, 30);
+    }
+
+    private bool HasUnreadMessages(ChatConversation conversation)
+    {
+        return conversation.Messages
+            .Any(m => !m.ReadBy.Contains(_currentUserId) && 
+                     m.SenderId != _currentUserId);
+    }
+
+    private int GetUnreadCount(ChatConversation conversation)
+    {
+        return conversation.Messages
+            .Count(m => !m.ReadBy.Contains(_currentUserId) && 
+                       m.SenderId != _currentUserId);
+    }
+
+    private bool IsOwnMessage(ChatMessage message)
+    {
+        return message.SenderId == _currentUserId;
+    }
+
+    private string FormatTime(DateTime time)
+    {
+        return time.ToLocalTime().ToString("HH:mm");
+    }
+
+    private string TruncateText(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        return text.Length <= maxLength ? text : 
+            text.Substring(0, maxLength - 3) + "...";
+    }
+}
