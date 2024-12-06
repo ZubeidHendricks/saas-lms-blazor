@@ -1,0 +1,176 @@
+@using SaasLMS.Core.Integration.VideoConferencing
+@inject IVideoConferencingFactory VideoConferencingFactory
+
+<div class="meeting-room @(_isMeetingActive ? "active" : "")">
+    <div class="meeting-header">
+        <h3>@Meeting.Topic</h3>
+        <div class="meeting-controls">
+            @if (_isMeetingActive)
+            {
+                <button class="btn btn-danger" @onclick="LeaveMeeting">
+                    Leave Meeting
+                </button>
+            }
+            else
+            {
+                <button class="btn btn-primary" @onclick="JoinMeeting">
+                    Join Meeting
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="meeting-info">
+        <div class="info-section">
+            <span class="label">Start Time:</span>
+            <span class="value">@Meeting.StartTime.ToLocalTime().ToString("g")</span>
+        </div>
+        <div class="info-section">
+            <span class="label">Duration:</span>
+            <span class="value">@Meeting.DurationMinutes minutes</span>
+        </div>
+        <div class="info-section">
+            <span class="label">Status:</span>
+            <span class="status-badge @GetStatusClass(Meeting.Status)">
+                @Meeting.Status
+            </span>
+        </div>
+    </div>
+
+    @if (_isMeetingActive)
+    {
+        <div class="video-container">
+            @if (Meeting.Platform == MeetingPlatform.Zoom)
+            {
+                <iframe src="@GetZoomMeetingUrl()" 
+                        allow="microphone; camera; fullscreen"
+                        style="width: 100%; height: 600px;"></iframe>
+            }
+            else
+            {
+                <iframe src="@Meeting.JoinUrl"
+                        allow="microphone; camera; fullscreen"
+                        style="width: 100%; height: 600px;"></iframe>
+            }
+        </div>
+
+        @if (_participants?.Any() == true)
+        {
+            <div class="participants-list">
+                <h4>Participants (@_participants.Count)</h4>
+                @foreach (var participant in _participants)
+                {
+                    <div class="participant-item">
+                        <span class="name">@participant.Name</span>
+                        <span class="time">Joined: @participant.JoinTime.ToLocalTime().ToString("t")</span>
+                    </div>
+                }
+            </div>
+        }
+    }
+
+    @if (Meeting.Status == MeetingStatus.Completed && _recording != null)
+    {
+        <div class="recording-section">
+            <h4>Meeting Recording</h4>
+            <div class="recording-info">
+                <span>Duration: @FormatDuration(_recording.RecordingEnd - _recording.RecordingStart)</span>
+                <div class="recording-actions">
+                    <a href="@_recording.PlayUrl" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="bi bi-play-fill"></i> Play Recording
+                    </a>
+                    <a href="@_recording.DownloadUrl" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-download"></i> Download
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Meeting Meeting { get; set; }
+    [Parameter] public EventCallback<Meeting> OnMeetingEnd { get; set; }
+
+    private bool _isMeetingActive;
+    private List<MeetingParticipant> _participants;
+    private MeetingRecording _recording;
+    private Timer _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _refreshTimer = new Timer(async _ =>
+        {
+            if (_isMeetingActive)
+            {
+                await RefreshParticipants();
+                await InvokeAsync(StateHasChanged);
+            }
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+    }
+
+    private async Task JoinMeeting()
+    {
+        _isMeetingActive = true;
+        await RefreshParticipants();
+    }
+
+    private async Task LeaveMeeting()
+    {
+        _isMeetingActive = false;
+        await OnMeetingEnd.InvokeAsync(Meeting);
+    }
+
+    private async Task RefreshParticipants()
+    {
+        try
+        {
+            var service = VideoConferencingFactory.GetService(Meeting.Platform);
+            _participants = await service.GetParticipantsAsync(Meeting.Id);
+
+            if (Meeting.Status == MeetingStatus.Completed)
+            {
+                _recording = await service.GetRecordingAsync(Meeting.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+        }
+    }
+
+    private string GetZoomMeetingUrl()
+    {
+        var queryParams = new Dictionary<string, string>
+        {
+            { "mn", Meeting.Id },
+            { "pwd", Meeting.Password },
+            { "zc", "0" },  // Don't download client
+            { "browser", "chrome" }
+        };
+
+        var queryString = string.Join("&", queryParams.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}"));
+        return $"https://zoom.us/wc/join/{Meeting.Id}?{queryString}";
+    }
+
+    private string GetStatusClass(MeetingStatus status) => status switch
+    {
+        MeetingStatus.Scheduled => "status-scheduled",
+        MeetingStatus.InProgress => "status-live",
+        MeetingStatus.Completed => "status-completed",
+        MeetingStatus.Cancelled => "status-cancelled",
+        _ => ""
+    };
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1 ?
+            $"{Math.Floor(duration.TotalHours)}h {duration.Minutes}m" :
+            $"{duration.Minutes}m";
+    }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}
